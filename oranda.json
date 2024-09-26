@@ -1,0 +1,11 @@
+{
+    "project": {
+        "name": "edc-connector-tui"
+    },
+    "build": {
+        "path_prefix": "edc-connector-tui"
+    },
+    "styles": {
+        "theme": "hacker"
+    }
+}
