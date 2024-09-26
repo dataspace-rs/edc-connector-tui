@@ -1,0 +1,15 @@
+[workspace]
+publish = false
+release = false
+git_release_enable = false
+changelog_config = "cliff.toml"
+changelog_update = true
+git_tag_enable = true
+
+
+[[package]]
+name = "edc-connector-tui"
+changelog_path = "CHANGELOG.md"
+publish = true
+release = true
+changelog_update = true
