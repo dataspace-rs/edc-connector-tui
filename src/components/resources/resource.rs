@@ -4,19 +4,19 @@ use arboard::Clipboard;
 use crossterm::event::{Event, KeyCode, KeyEvent};
 use msg::ResourceMsg;
 use ratatui::{
-    layout::{Alignment, Constraint, Layout, Rect},
+    buffer::Buffer,
+    layout::{Alignment, Constraint, Layout, Rect, Size},
     style::{Color, Style},
     text::Span,
-    widgets::{block::Title, Block, BorderType, Borders, Paragraph},
+    widgets::{block::Title, Block, BorderType, Borders, Paragraph, StatefulWidget, Widget},
     Frame,
 };
+use tui_scrollview::{ScrollView, ScrollViewState};
 
 pub mod msg;
 use super::{Component, DrawableResource, Field, FieldValue};
 use crate::{
-    components::{
-        Action, ComponentEvent, ComponentMsg, ComponentReturn, Notification, StatelessComponent,
-    },
+    components::{Action, ComponentEvent, ComponentMsg, ComponentReturn, Notification},
     types::info::InfoSheet,
 };
 
@@ -25,6 +25,7 @@ pub struct ResourceComponent<T> {
     name: String,
     selected_field: usize,
     clip: Clipboard,
+    scroll_view_state: ScrollViewState,
 }
 
 impl<T> Debug for ResourceComponent<T> {
@@ -43,6 +44,7 @@ impl<T> Default for ResourceComponent<T> {
             name: String::default(),
             selected_field: 0,
             clip: Clipboard::new().unwrap(),
+            scroll_view_state: ScrollViewState::default(),
         }
     }
 }
@@ -63,20 +65,47 @@ impl<T: DrawableResource> ResourceComponent<T> {
             resource: None,
             selected_field: 0,
             clip: Clipboard::new().unwrap(),
+            scroll_view_state: ScrollViewState::default(),
         }
     }
 
     pub fn update_resource(&mut self, resource: Option<T>) {
         self.resource = resource;
     }
-
+    fn fields_height(&self) -> u16 {
+        if let Some(res) = self.resource.as_ref() {
+            res.fields()
+                .into_iter()
+                .map(|f| match f.value {
+                    FieldValue::Str(_) => 3,
+                    FieldValue::Json(_) => 10,
+                })
+                .sum()
+        } else {
+            0
+        }
+    }
+    fn fields_height_at(&self, idx: usize) -> u16 {
+        if let Some(res) = self.resource.as_ref() {
+            res.fields()
+                .into_iter()
+                .take(idx)
+                .map(|f| match f.value {
+                    FieldValue::Str(_) => 3,
+                    FieldValue::Json(_) => 10,
+                })
+                .sum()
+        } else {
+            0
+        }
+    }
     pub fn field_constraints(&self) -> Vec<Constraint> {
         if let Some(res) = self.resource.as_ref() {
             res.fields()
                 .into_iter()
                 .map(|f| match f.value {
                     FieldValue::Str(_) => Constraint::Length(3),
-                    FieldValue::Json(_) => Constraint::Min(5),
+                    FieldValue::Json(_) => Constraint::Length(10),
                 })
                 .collect()
         } else {
@@ -84,6 +113,18 @@ impl<T: DrawableResource> ResourceComponent<T> {
         }
     }
 
+    pub fn render_fields(&self, buffer: &mut Buffer) {
+        let constraints = self.field_constraints();
+
+        let areas = Layout::vertical(constraints).split(buffer.area);
+
+        if let Some(res) = self.resource.as_ref() {
+            for (idx, elem) in res.fields().into_iter().enumerate() {
+                let field = FieldWidget::new(&elem, idx == self.selected_field);
+                field.render(areas[idx], buffer);
+            }
+        }
+    }
     fn handle_key(&self, key: KeyEvent) -> Vec<ComponentMsg<ResourceMsg>> {
         match key.code {
             KeyCode::Char('j') | KeyCode::Down => vec![(ComponentMsg(ResourceMsg::MoveDown))],
@@ -109,25 +150,26 @@ impl<T: DrawableResource> ResourceComponent<T> {
     }
 
     fn move_up(&mut self) {
-        if let Some(res) = self.resource.as_ref() {
-            let pos = if self.selected_field == 0 {
-                res.fields().len() - 1
-            } else {
-                self.selected_field - 1
-            };
-            self.selected_field = pos;
+        if self.resource.is_some() && self.selected_field != 0 {
+            self.selected_field -= 1;
+            self.scroll_to_field(self.selected_field);
         }
     }
 
     fn move_down(&mut self) {
         if let Some(res) = self.resource.as_ref() {
-            let pos = if self.selected_field == res.fields().len() - 1 {
-                0
-            } else {
-                self.selected_field + 1
+            if self.selected_field != res.fields().len() - 1 {
+                self.selected_field += 1;
+                self.scroll_to_field(self.selected_field);
             };
-            self.selected_field = pos;
         }
+    }
+
+    fn scroll_to_field(&mut self, idx: usize) {
+        let ref_field = if idx == 0 { 0 } else { idx - 1 };
+        let mut offset = self.scroll_view_state.offset();
+        offset.y = self.fields_height_at(ref_field);
+        self.scroll_view_state.set_offset(offset);
     }
 }
 
@@ -149,19 +191,12 @@ impl<T: DrawableResource + Send> Component for ResourceComponent<T> {
             .title(Title::from(styled_text).alignment(Alignment::Center))
             .borders(Borders::ALL);
 
-        let constraints = self.field_constraints();
+        let area = block.inner(rect);
 
-        if !constraints.is_empty() {
-            let area = block.inner(rect);
-            let layout = Layout::vertical(constraints).split(area);
-            if let Some(res) = self.resource.as_ref() {
-                for (idx, elem) in res.fields().into_iter().enumerate() {
-                    let mut field = FieldComponent;
-                    field.view(&(elem, idx == self.selected_field), f, layout[idx]);
-                }
-            }
-        }
+        let mut scroll_view = ScrollView::new(Size::new(area.width - 1, self.fields_height()));
 
+        self.render_fields(scroll_view.buf_mut());
+        scroll_view.render(area, f.buffer_mut(), &mut self.scroll_view_state);
         f.render_widget(block, rect);
     }
 
@@ -189,26 +224,36 @@ impl<T: DrawableResource + Send> Component for ResourceComponent<T> {
     }
 }
 
-pub struct FieldComponent;
+pub struct FieldWidget<'a> {
+    field: &'a Field,
+    selected: bool,
+}
 
-impl StatelessComponent for FieldComponent {
-    type Props = (Field, bool);
+impl<'a> FieldWidget<'a> {
+    pub fn new(f: &'a Field, selected: bool) -> Self {
+        Self { field: f, selected }
+    }
+}
 
-    fn view(&mut self, (field, selected): &Self::Props, f: &mut Frame, rect: Rect) {
-        let style = if *selected {
+impl<'a> Widget for FieldWidget<'a> {
+    fn render(self, area: Rect, buf: &mut Buffer)
+    where
+        Self: Sized,
+    {
+        let style = if self.selected {
             Style::default().fg(Color::Yellow)
         } else {
             Style::default()
         };
-        let styled_text = Span::styled(format!(" {} ", field.name), style);
+        let styled_text = Span::styled(format!(" {} ", self.field.name), style);
 
-        let value = Paragraph::new(field.value.as_ref()).block(
+        let value = Paragraph::new(self.field.value.as_ref()).block(
             Block::bordered()
                 .title(styled_text)
                 .border_style(style)
                 .border_type(BorderType::Double),
         );
 
-        f.render_widget(value, rect)
+        value.render(area, buf);
     }
 }

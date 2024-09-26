@@ -193,7 +193,7 @@ impl<T: DrawableResource + TableEntry + Send + Sync + 'static> Component for Res
                 Self::forward_update(&mut self.table, table.into(), ResourcesMsg::TableEvent).await
             }
             ResourcesMsg::ResourcesFetched(resources) => {
-                self.table.elements = resources;
+                self.table.update_elements(resources);
                 Ok(ComponentReturn::empty())
             }
             ResourcesMsg::Back => {
@@ -201,7 +201,7 @@ impl<T: DrawableResource + TableEntry + Send + Sync + 'static> Component for Res
                 Ok(ComponentReturn::action(Action::ChangeSheet))
             }
             ResourcesMsg::NextPage => {
-                if self.table.elements.len() as u32 == self.page_size {
+                if self.table.elements().len() as u32 == self.page_size {
                     self.query = self
                         .query
                         .to_builder()
