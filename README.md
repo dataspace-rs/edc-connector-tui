@@ -1,4 +1,3 @@
-# EDC Connector TUI 
 
 <div class="oranda-hide">
   <h1 align="center">EDC Connector TUI</h1>
