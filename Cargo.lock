@@ -565,9 +565,9 @@ checksum = "75b325c5dbd37f80359721ad39aca5a29fb04c89279657cffdda8736d0c0b9d2"
 
 [[package]]
 name = "edc-connector-client"
-version = "0.2.2"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6edb16c57b7bedf761573ae179e532ae18f44cd27cdb67d13c6c29db2de9c8c4"
+checksum = "9c0fbb5af4a4f004be2460eea46334709a338cb6e45906ebfd07b440ff6d8861"
 dependencies = [
  "reqwest",
  "serde",
