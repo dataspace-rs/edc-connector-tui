@@ -2,7 +2,8 @@ use edc_connector_client::types::query::Query;
 
 use crate::{
     components::{
-        assets::AssetEntry, contract_definitions::ContractDefinitionEntry,
+        agreements::ContractAgreementEntry, assets::AssetEntry,
+        contract_definitions::ContractDefinitionEntry,
         contract_negotiations::ContractNegotiationEntry, policies::PolicyDefinitionEntry,
         transfer_processes::TransferProcessEntry,
     },
@@ -54,6 +55,19 @@ impl App {
             .collect())
     }
 
+    pub async fn fetch_contract_agreements(
+        connector: Connector,
+        query: Query,
+    ) -> anyhow::Result<Vec<ContractAgreementEntry>> {
+        Ok(connector
+            .client()
+            .contract_agreements()
+            .query(query)
+            .await?
+            .into_iter()
+            .map(ContractAgreementEntry::new)
+            .collect())
+    }
     pub async fn fetch_transfer_processes(
         connector: Connector,
         query: Query,

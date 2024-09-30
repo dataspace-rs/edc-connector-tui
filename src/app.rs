@@ -15,8 +15,8 @@ use ratatui::{
 
 use crate::{
     components::{
-        assets::AssetsComponent, connectors::ConnectorsComponent,
-        contract_definitions::ContractDefinitionsComponent,
+        agreements::ContractAgreementsComponent, assets::AssetsComponent,
+        connectors::ConnectorsComponent, contract_definitions::ContractDefinitionsComponent,
         contract_negotiations::ContractNegotiationsComponent, footer::Footer,
         header::HeaderComponent, launch_bar::LaunchBar, policies::PolicyDefinitionsComponent,
         transfer_processes::TransferProcessesComponent, Component, ComponentEvent, ComponentMsg,
@@ -40,6 +40,7 @@ pub struct App {
     assets: AssetsComponent,
     contract_definitions: ContractDefinitionsComponent,
     contract_negotiations: ContractNegotiationsComponent,
+    contract_agreements: ContractAgreementsComponent,
     transfer_processes: TransferProcessesComponent,
     launch_bar: LaunchBar,
     launch_bar_visible: bool,
@@ -92,6 +93,8 @@ impl App {
                 .on_fetch(Self::fetch_contract_definitions),
             contract_negotiations: ContractNegotiationsComponent::default()
                 .on_fetch(Self::fetch_contract_negotiations),
+            contract_agreements: ContractAgreementsComponent::default()
+                .on_fetch(Self::fetch_contract_agreements),
             transfer_processes: TransferProcessesComponent::default()
                 .on_fetch(Self::fetch_transfer_processes),
             launch_bar: LaunchBar::default(),
@@ -148,6 +151,7 @@ impl App {
             Menu::Policies => self.policies.info_sheet(),
             Menu::ContractDefinitions => self.contract_definitions.info_sheet(),
             Menu::ContractNegotiations => self.contract_negotiations.info_sheet(),
+            Menu::ContractAgreements => self.contract_agreements.info_sheet(),
             Menu::TransferProcesses => self.transfer_processes.info_sheet(),
         };
 
@@ -206,6 +210,18 @@ impl App {
                 }
                 Ok(ComponentReturn::empty())
             }
+            Menu::ContractAgreements => {
+                self.focus = AppFocus::ContractAgreements;
+                if let Some(connector) = self.connectors.selected() {
+                    return Self::forward_init(
+                        &mut self.contract_agreements,
+                        connector.clone(),
+                        AppMsg::ContractAgreements,
+                    )
+                    .await;
+                }
+                Ok(ComponentReturn::empty())
+            }
             Menu::ContractNegotiations => {
                 self.focus = AppFocus::ContractNegotiations;
                 if let Some(connector) = self.connectors.selected() {
@@ -251,6 +267,7 @@ impl Component for App {
             Menu::Policies => self.policies.view(f, main[2]),
             Menu::ContractDefinitions => self.contract_definitions.view(f, main[2]),
             Menu::ContractNegotiations => self.contract_negotiations.view(f, main[2]),
+            Menu::ContractAgreements => self.contract_agreements.view(f, main[2]),
             Menu::TransferProcesses => self.transfer_processes.view(f, main[2]),
         }
 
@@ -306,6 +323,14 @@ impl Component for App {
                 )
                 .await
             }
+            AppMsg::ContractAgreements(m) => {
+                Self::forward_update(
+                    &mut self.contract_agreements,
+                    m.into(),
+                    AppMsg::ContractAgreements,
+                )
+                .await
+            }
             AppMsg::TransferProcesses(m) => {
                 Self::forward_update(
                     &mut self.transfer_processes,
@@ -350,6 +375,11 @@ impl Component for App {
                 &mut self.contract_negotiations,
                 evt.clone(),
                 AppMsg::ContractNegotiations,
+            )?,
+            AppFocus::ContractAgreements => Self::forward_event(
+                &mut self.contract_agreements,
+                evt.clone(),
+                AppMsg::ContractAgreements,
             )?,
             AppFocus::TransferProcesses => Self::forward_event(
                 &mut self.transfer_processes,

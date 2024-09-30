@@ -1,6 +1,6 @@
 use crate::{
     components::{
-        assets::AssetsMsg, connectors::msg::ConnectorsMsg,
+        agreements::ContractAgreementsMsg, assets::AssetsMsg, connectors::msg::ConnectorsMsg,
         contract_definitions::ContractDefinitionsMsg,
         contract_negotiations::ContractNegotiationMsg, header::msg::HeaderMsg,
         launch_bar::msg::LaunchBarMsg, policies::PoliciesMsg,
@@ -19,6 +19,7 @@ pub enum AppMsg {
     PoliciesMsg(PoliciesMsg),
     ContractDefinitions(ContractDefinitionsMsg),
     ContractNegotiations(ContractNegotiationMsg),
+    ContractAgreements(ContractAgreementsMsg),
     TransferProcesses(TransferProcessMsg),
     HeaderMsg(HeaderMsg),
     RoutingMsg(Nav),

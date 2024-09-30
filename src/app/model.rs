@@ -7,5 +7,6 @@ pub enum AppFocus {
     Policies,
     ContractDefinitions,
     ContractNegotiations,
+    ContractAgreements,
     TransferProcesses,
 }
