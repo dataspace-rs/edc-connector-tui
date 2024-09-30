@@ -17,7 +17,7 @@ use crate::{
     components::{
         agreements::ContractAgreementsComponent, assets::AssetsComponent,
         connectors::ConnectorsComponent, contract_definitions::ContractDefinitionsComponent,
-        contract_negotiations::ContractNegotiationsComponent, footer::Footer,
+        contract_negotiations::ContractNegotiationsComponent, edrs::EdrsComponent, footer::Footer,
         header::HeaderComponent, launch_bar::LaunchBar, policies::PolicyDefinitionsComponent,
         transfer_processes::TransferProcessesComponent, Component, ComponentEvent, ComponentMsg,
         ComponentReturn, Notification, NotificationMsg,
@@ -42,6 +42,7 @@ pub struct App {
     contract_negotiations: ContractNegotiationsComponent,
     contract_agreements: ContractAgreementsComponent,
     transfer_processes: TransferProcessesComponent,
+    edrs: EdrsComponent,
     launch_bar: LaunchBar,
     launch_bar_visible: bool,
     focus: AppFocus,
@@ -87,16 +88,27 @@ impl App {
 
         App {
             connectors,
-            policies: PolicyDefinitionsComponent::default().on_fetch(Self::fetch_policies),
-            assets: AssetsComponent::default().on_fetch(Self::fetch_assets),
+            policies: PolicyDefinitionsComponent::default()
+                .on_fetch(Self::fetch_policies)
+                .on_single_fetch(Self::identity),
+            assets: AssetsComponent::default()
+                .on_fetch(Self::fetch_assets)
+                .on_single_fetch(Self::identity),
             contract_definitions: ContractDefinitionsComponent::default()
-                .on_fetch(Self::fetch_contract_definitions),
+                .on_fetch(Self::fetch_contract_definitions)
+                .on_single_fetch(Self::identity),
             contract_negotiations: ContractNegotiationsComponent::default()
-                .on_fetch(Self::fetch_contract_negotiations),
+                .on_fetch(Self::fetch_contract_negotiations)
+                .on_single_fetch(Self::identity),
             contract_agreements: ContractAgreementsComponent::default()
-                .on_fetch(Self::fetch_contract_agreements),
+                .on_fetch(Self::fetch_contract_agreements)
+                .on_single_fetch(Self::identity),
             transfer_processes: TransferProcessesComponent::default()
-                .on_fetch(Self::fetch_transfer_processes),
+                .on_fetch(Self::fetch_transfer_processes)
+                .on_single_fetch(Self::identity),
+            edrs: EdrsComponent::default()
+                .on_fetch(Self::fetch_edrs)
+                .on_single_fetch(Self::single_edr),
             launch_bar: LaunchBar::default(),
             launch_bar_visible: false,
             focus: AppFocus::ConnectorList,
@@ -153,6 +165,7 @@ impl App {
             Menu::ContractNegotiations => self.contract_negotiations.info_sheet(),
             Menu::ContractAgreements => self.contract_agreements.info_sheet(),
             Menu::TransferProcesses => self.transfer_processes.info_sheet(),
+            Menu::Edrs => self.edrs.info_sheet(),
         };
 
         self.header.update_sheet(
@@ -246,6 +259,14 @@ impl App {
                 }
                 Ok(ComponentReturn::empty())
             }
+            Menu::Edrs => {
+                self.focus = AppFocus::Edrs;
+                if let Some(connector) = self.connectors.selected() {
+                    return Self::forward_init(&mut self.edrs, connector.clone(), AppMsg::Edrs)
+                        .await;
+                }
+                Ok(ComponentReturn::empty())
+            }
         }
     }
 }
@@ -269,6 +290,7 @@ impl Component for App {
             Menu::ContractNegotiations => self.contract_negotiations.view(f, main[2]),
             Menu::ContractAgreements => self.contract_agreements.view(f, main[2]),
             Menu::TransferProcesses => self.transfer_processes.view(f, main[2]),
+            Menu::Edrs => self.edrs.view(f, main[2]),
         }
 
         self.footer.view(f, main[3]);
@@ -339,6 +361,7 @@ impl Component for App {
                 )
                 .await
             }
+            AppMsg::Edrs(m) => Self::forward_update(&mut self.edrs, m.into(), AppMsg::Edrs).await,
             AppMsg::HeaderMsg(m) => {
                 Self::forward_update(&mut self.header, m.into(), AppMsg::HeaderMsg).await
             }
@@ -386,6 +409,7 @@ impl Component for App {
                 evt.clone(),
                 AppMsg::TransferProcesses,
             )?,
+            AppFocus::Edrs => Self::forward_event(&mut self.edrs, evt.clone(), AppMsg::Edrs)?,
         };
 
         let msg = if msg.is_empty() {

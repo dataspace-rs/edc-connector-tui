@@ -14,6 +14,7 @@ pub enum Nav {
     ContractNegotiations,
     ContractAgreements,
     TransferProcesses,
+    Edrs,
 }
 
 impl FromStr for Nav {
@@ -40,6 +41,7 @@ pub enum Menu {
     ContractNegotiations,
     ContractAgreements,
     TransferProcesses,
+    Edrs,
 }
 
 impl Menu {
@@ -61,6 +63,7 @@ impl From<Nav> for Menu {
             Nav::ContractNegotiations => Menu::ContractNegotiations,
             Nav::TransferProcesses => Menu::TransferProcesses,
             Nav::ContractAgreements => Menu::ContractAgreements,
+            Nav::Edrs => Menu::Edrs,
         }
     }
 }
@@ -75,6 +78,7 @@ impl From<Menu> for Nav {
             Menu::ContractNegotiations => Nav::ContractNegotiations,
             Menu::TransferProcesses => Nav::TransferProcesses,
             Menu::ContractAgreements => Nav::ContractAgreements,
+            Menu::Edrs => Nav::Edrs,
         }
     }
 }

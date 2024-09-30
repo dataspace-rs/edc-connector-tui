@@ -9,4 +9,5 @@ pub enum AppFocus {
     ContractNegotiations,
     ContractAgreements,
     TransferProcesses,
+    Edrs,
 }

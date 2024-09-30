@@ -2,9 +2,12 @@ use edc_connector_client::types::query::Query;
 
 use crate::{
     components::{
-        agreements::ContractAgreementEntry, assets::AssetEntry,
+        agreements::ContractAgreementEntry,
+        assets::AssetEntry,
         contract_definitions::ContractDefinitionEntry,
-        contract_negotiations::ContractNegotiationEntry, policies::PolicyDefinitionEntry,
+        contract_negotiations::ContractNegotiationEntry,
+        edrs::{EdrEntry, EdrMetadataEntry},
+        policies::PolicyDefinitionEntry,
         transfer_processes::TransferProcessEntry,
     },
     types::connector::Connector,
@@ -82,6 +85,19 @@ impl App {
             .collect())
     }
 
+    pub async fn fetch_edrs(
+        connector: Connector,
+        query: Query,
+    ) -> anyhow::Result<Vec<EdrMetadataEntry>> {
+        Ok(connector
+            .client()
+            .edrs()
+            .query(query)
+            .await?
+            .into_iter()
+            .map(EdrMetadataEntry::new)
+            .collect())
+    }
     pub async fn fetch_policies(
         connector: Connector,
         query: Query,
@@ -94,5 +110,22 @@ impl App {
             .into_iter()
             .map(PolicyDefinitionEntry::new)
             .collect())
+    }
+
+    pub async fn identity<T>(_connector: Connector, entity: T) -> anyhow::Result<T> {
+        Ok(entity)
+    }
+
+    pub async fn single_edr(
+        connector: Connector,
+        edr_entry: EdrMetadataEntry,
+    ) -> anyhow::Result<EdrEntry> {
+        connector
+            .client()
+            .edrs()
+            .get_data_address(edr_entry.id())
+            .await
+            .map(|data_address| EdrEntry::new(edr_entry.id().to_string(), data_address))
+            .map(Ok)?
     }
 }

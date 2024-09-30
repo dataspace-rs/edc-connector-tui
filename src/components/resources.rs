@@ -22,10 +22,13 @@ use std::future::Future;
 pub mod msg;
 pub mod resource;
 
-pub type ResourceTable<T> = UiTable<T, Box<ResourcesMsg<T>>>;
+pub type ResourceTable<T, R> = UiTable<T, Box<ResourcesMsg<T, R>>>;
 
 pub type OnFetch<T> =
     Arc<dyn Fn(&Connector, Query) -> BoxFuture<'static, anyhow::Result<Vec<T>>> + Send + Sync>;
+
+pub type OnSingleFetch<T, R> =
+    Arc<dyn Fn(&Connector, T) -> BoxFuture<'static, anyhow::Result<R>> + Send + Sync>;
 
 #[derive(Debug)]
 pub enum Focus {
@@ -33,17 +36,20 @@ pub enum Focus {
     Resource,
 }
 
-pub struct ResourcesComponent<T: TableEntry> {
-    table: ResourceTable<T>,
-    resource: ResourceComponent<T>,
+pub struct ResourcesComponent<T: TableEntry, R: DrawableResource> {
+    table: ResourceTable<T, R>,
+    resource: ResourceComponent<R>,
     focus: Focus,
     connector: Option<Connector>,
     on_fetch: Option<OnFetch<T>>,
+    on_single_fetch: Option<OnSingleFetch<T, R>>,
     query: Query,
     page_size: u32,
 }
 
-impl<T: DrawableResource + TableEntry + Send + Sync + 'static> ResourcesComponent<T> {
+impl<T: TableEntry + Send + Sync + 'static, R: DrawableResource + Send + Sync + 'static>
+    ResourcesComponent<T, R>
+{
     pub fn on_fetch<F, Fut>(mut self, on_fetch: F) -> Self
     where
         F: Fn(Connector, Query) -> Fut + Send + Sync + 'static,
@@ -54,6 +60,21 @@ impl<T: DrawableResource + TableEntry + Send + Sync + 'static> ResourcesComponen
             let c = conn.clone();
             let inner_handler = handler.clone();
             async move { inner_handler(c, query).await }.boxed()
+        }));
+
+        self
+    }
+
+    pub fn on_single_fetch<F, Fut>(mut self, on_single_fetch: F) -> Self
+    where
+        F: Fn(Connector, T) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = anyhow::Result<R>> + Send,
+    {
+        let handler = Arc::new(on_single_fetch);
+        self.on_single_fetch = Some(Arc::new(move |conn, entity| {
+            let c = conn.clone();
+            let inner_handler = handler.clone();
+            async move { inner_handler(c, entity).await }.boxed()
         }));
 
         self
@@ -73,7 +94,7 @@ impl<T: DrawableResource + TableEntry + Send + Sync + 'static> ResourcesComponen
             .key_binding("<r>", "Refresh page")
     }
 
-    fn fetch(&self) -> anyhow::Result<ComponentReturn<ResourcesMsg<T>>> {
+    fn fetch(&self) -> anyhow::Result<ComponentReturn<ResourcesMsg<T, R>>> {
         if let (Some(connector), Some(on_fetch)) = (self.connector.as_ref(), self.on_fetch.as_ref())
         {
             let query = self.query.clone();
@@ -96,9 +117,31 @@ impl<T: DrawableResource + TableEntry + Send + Sync + 'static> ResourcesComponen
         }
     }
 
+    fn single_fetch(&self, selected: T) -> anyhow::Result<ComponentReturn<ResourcesMsg<T, R>>> {
+        if let (Some(connector), Some(on_single_fetch)) =
+            (self.connector.as_ref(), self.on_single_fetch.as_ref())
+        {
+            let connector = connector.clone();
+            let on_single_fetch = on_single_fetch.clone();
+            Ok(ComponentReturn::cmd(
+                async move {
+                    match on_single_fetch(&connector, selected).await {
+                        Ok(element) => Ok(vec![ResourcesMsg::ResourceFetched(element).into()]),
+                        Err(err) => Ok(vec![
+                            ResourcesMsg::ResourcesFetchFailed(err.to_string()).into()
+                        ]),
+                    }
+                }
+                .boxed(),
+            ))
+        } else {
+            Ok(ComponentReturn::empty())
+        }
+    }
+
     fn view_table(&mut self, f: &mut Frame, area: Rect) {
         let styled_text =
-            Span::styled(format!(" {} ", T::title()), Style::default().fg(Color::Red));
+            Span::styled(format!(" {} ", R::title()), Style::default().fg(Color::Red));
         let block = Block::default()
             .title(Title::from(styled_text).alignment(Alignment::Center))
             .borders(Borders::ALL);
@@ -147,15 +190,16 @@ impl<T: DrawableResource + TableEntry + Send + Sync + 'static> ResourcesComponen
     }
 }
 
-impl<T: DrawableResource + TableEntry + Clone> Default for ResourcesComponent<T> {
+impl<T: TableEntry + Clone, R: DrawableResource> Default for ResourcesComponent<T, R> {
     fn default() -> Self {
         Self {
-            table: ResourceTable::new(T::title().to_string())
+            table: ResourceTable::new(R::title().to_string())
                 .on_select(|res: &T| Box::new(ResourcesMsg::ResourceSelected(res.clone()))),
-            resource: ResourceComponent::new(T::title().to_string()),
+            resource: ResourceComponent::new(R::title().to_string()),
             focus: Focus::ResourceList,
             connector: None,
             on_fetch: None,
+            on_single_fetch: None,
             query: Query::default(),
             page_size: 50,
         }
@@ -163,8 +207,10 @@ impl<T: DrawableResource + TableEntry + Clone> Default for ResourcesComponent<T>
 }
 
 #[async_trait::async_trait]
-impl<T: DrawableResource + TableEntry + Send + Sync + 'static> Component for ResourcesComponent<T> {
-    type Msg = ResourcesMsg<T>;
+impl<T: TableEntry + Send + Sync + 'static, R: DrawableResource + Send + Sync + 'static> Component
+    for ResourcesComponent<T, R>
+{
+    type Msg = ResourcesMsg<T, R>;
     type Props = Connector;
 
     async fn init(&mut self, props: Self::Props) -> anyhow::Result<ComponentReturn<Self::Msg>> {
@@ -184,11 +230,12 @@ impl<T: DrawableResource + TableEntry + Send + Sync + 'static> Component for Res
         msg: ComponentMsg<Self::Msg>,
     ) -> anyhow::Result<ComponentReturn<Self::Msg>> {
         match msg.take() {
-            ResourcesMsg::ResourceSelected(selected) => {
-                self.resource.update_resource(Some(selected));
+            ResourcesMsg::ResourceFetched(resource) => {
+                self.resource.update_resource(Some(resource));
                 self.focus = Focus::Resource;
                 Ok(ComponentReturn::action(Action::ChangeSheet))
             }
+            ResourcesMsg::ResourceSelected(selected) => self.single_fetch(selected),
             ResourcesMsg::TableEvent(table) => {
                 Self::forward_update(&mut self.table, table.into(), ResourcesMsg::TableEvent).await
             }

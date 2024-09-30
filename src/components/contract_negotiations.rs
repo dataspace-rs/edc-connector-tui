@@ -17,8 +17,9 @@ impl ContractNegotiationEntry {
     }
 }
 
-pub type ContractNegotiationMsg = ResourcesMsg<ContractNegotiationEntry>;
-pub type ContractNegotiationsComponent = ResourcesComponent<ContractNegotiationEntry>;
+pub type ContractNegotiationMsg = ResourcesMsg<ContractNegotiationEntry, ContractNegotiationEntry>;
+pub type ContractNegotiationsComponent =
+    ResourcesComponent<ContractNegotiationEntry, ContractNegotiationEntry>;
 
 impl TableEntry for ContractNegotiationEntry {
     fn row(&self) -> Row {
