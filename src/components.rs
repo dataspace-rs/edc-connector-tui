@@ -11,6 +11,7 @@ pub mod assets;
 pub mod connectors;
 pub mod contract_definitions;
 pub mod contract_negotiations;
+pub mod edrs;
 pub mod footer;
 pub mod header;
 pub mod launch_bar;

@@ -7,8 +7,8 @@ use super::{
 use edc_connector_client::types::asset::Asset;
 use ratatui::widgets::Row;
 
-pub type AssetsMsg = ResourcesMsg<AssetEntry>;
-pub type AssetsComponent = ResourcesComponent<AssetEntry>;
+pub type AssetsMsg = ResourcesMsg<AssetEntry, AssetEntry>;
+pub type AssetsComponent = ResourcesComponent<AssetEntry, AssetEntry>;
 
 #[derive(Debug, Clone)]
 pub struct AssetEntry(Asset);

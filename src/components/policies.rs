@@ -6,8 +6,9 @@ use super::{
     table::TableEntry,
 };
 
-pub type PoliciesMsg = ResourcesMsg<PolicyDefinitionEntry>;
-pub type PolicyDefinitionsComponent = ResourcesComponent<PolicyDefinitionEntry>;
+pub type PoliciesMsg = ResourcesMsg<PolicyDefinitionEntry, PolicyDefinitionEntry>;
+pub type PolicyDefinitionsComponent =
+    ResourcesComponent<PolicyDefinitionEntry, PolicyDefinitionEntry>;
 
 #[derive(Debug, Clone)]
 pub struct PolicyDefinitionEntry(PolicyDefinition);

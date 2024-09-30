@@ -17,8 +17,9 @@ impl TransferProcessEntry {
     }
 }
 
-pub type TransferProcessMsg = ResourcesMsg<TransferProcessEntry>;
-pub type TransferProcessesComponent = ResourcesComponent<TransferProcessEntry>;
+pub type TransferProcessMsg = ResourcesMsg<TransferProcessEntry, TransferProcessEntry>;
+pub type TransferProcessesComponent =
+    ResourcesComponent<TransferProcessEntry, TransferProcessEntry>;
 
 impl TableEntry for TransferProcessEntry {
     fn row(&self) -> Row {
