@@ -6,6 +6,7 @@ use ratatui::{layout::Rect, Frame};
 
 use crate::types::nav::Nav;
 
+pub mod agreements;
 pub mod assets;
 pub mod connectors;
 pub mod contract_definitions;

@@ -12,6 +12,7 @@ pub enum Nav {
     PoliciesList,
     ContractDefinitionsList,
     ContractNegotiations,
+    ContractAgreements,
     TransferProcesses,
 }
 
@@ -37,6 +38,7 @@ pub enum Menu {
     Policies,
     ContractDefinitions,
     ContractNegotiations,
+    ContractAgreements,
     TransferProcesses,
 }
 
@@ -58,6 +60,7 @@ impl From<Nav> for Menu {
             Nav::ContractDefinitionsList => Menu::ContractDefinitions,
             Nav::ContractNegotiations => Menu::ContractNegotiations,
             Nav::TransferProcesses => Menu::TransferProcesses,
+            Nav::ContractAgreements => Menu::ContractAgreements,
         }
     }
 }
@@ -71,6 +74,7 @@ impl From<Menu> for Nav {
             Menu::ContractDefinitions => Nav::ContractDefinitionsList,
             Menu::ContractNegotiations => Nav::ContractNegotiations,
             Menu::TransferProcesses => Nav::TransferProcesses,
+            Menu::ContractAgreements => Nav::ContractAgreements,
         }
     }
 }
