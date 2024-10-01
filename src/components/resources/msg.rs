@@ -10,6 +10,8 @@ pub enum ResourcesMsg<T, R> {
     NextPage,
     PrevPage,
     RefreshPage,
+    ShowFilters,
+    HideFilters,
     TableEvent(TableMsg<Box<ResourcesMsg<T, R>>>),
     ResourceMsg(ResourceMsg),
     ResourcesFetched(Vec<T>),

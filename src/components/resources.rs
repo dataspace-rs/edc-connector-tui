@@ -8,6 +8,7 @@ use super::{
 use crate::types::{connector::Connector, info::InfoSheet};
 use crossterm::event::{Event, KeyCode};
 use edc_connector_client::types::query::Query;
+use filter::Filter;
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use ratatui::{
@@ -19,6 +20,7 @@ use ratatui::{
 };
 use serde::Serialize;
 use std::future::Future;
+pub mod filter;
 pub mod msg;
 pub mod resource;
 
@@ -39,12 +41,12 @@ pub enum Focus {
 pub struct ResourcesComponent<T: TableEntry, R: DrawableResource> {
     table: ResourceTable<T, R>,
     resource: ResourceComponent<R>,
+    filter: Filter,
     focus: Focus,
+    show_filters: bool,
     connector: Option<Connector>,
     on_fetch: Option<OnFetch<T>>,
     on_single_fetch: Option<OnSingleFetch<T, R>>,
-    query: Query,
-    page_size: u32,
 }
 
 impl<T: TableEntry + Send + Sync + 'static, R: DrawableResource + Send + Sync + 'static>
@@ -92,12 +94,13 @@ impl<T: TableEntry + Send + Sync + 'static, R: DrawableResource + Send + Sync + 
             .key_binding("<n>", "Next Page")
             .key_binding("<p>", "Prev page")
             .key_binding("<r>", "Refresh page")
+            .key_binding("<f>", "Filters")
     }
 
     fn fetch(&self) -> anyhow::Result<ComponentReturn<ResourcesMsg<T, R>>> {
         if let (Some(connector), Some(on_fetch)) = (self.connector.as_ref(), self.on_fetch.as_ref())
         {
-            let query = self.query.clone();
+            let query = self.filter.query().clone();
 
             let connector = connector.clone();
             let on_fetch = on_fetch.clone();
@@ -157,12 +160,14 @@ impl<T: TableEntry + Send + Sync + 'static, R: DrawableResource + Send + Sync + 
 
     fn render_footer(&self, frame: &mut Frame, area: Rect) {
         let sort = self
-            .query
+            .filter
+            .query()
             .sort()
             .map(|s| format!("{}[{:?}]", s.field(), s.order()))
             .unwrap_or_else(|| String::from("None"));
         let filter = self
-            .query
+            .filter
+            .query()
             .filter_expression()
             .iter()
             .map(|criterion| {
@@ -177,8 +182,8 @@ impl<T: TableEntry + Send + Sync + 'static, R: DrawableResource + Send + Sync + 
 
         let text = format!(
             "Offset: {} | Limit: {} | Sort: {} | Filter: [{}]",
-            self.query.offset(),
-            self.query.limit(),
+            self.filter.query().offset(),
+            self.filter.query().limit(),
             sort,
             filter.join(" , ")
         );
@@ -198,10 +203,10 @@ impl<T: TableEntry + Clone, R: DrawableResource> Default for ResourcesComponent<
             resource: ResourceComponent::new(R::title().to_string()),
             focus: Focus::ResourceList,
             connector: None,
+            show_filters: false,
             on_fetch: None,
             on_single_fetch: None,
-            query: Query::default(),
-            page_size: 50,
+            filter: Filter::new(Query::default()),
         }
     }
 }
@@ -222,6 +227,10 @@ impl<T: TableEntry + Send + Sync + 'static, R: DrawableResource + Send + Sync + 
         match self.focus {
             Focus::ResourceList => self.view_table(f, rect),
             Focus::Resource => self.resource.view(f, rect),
+        };
+
+        if self.show_filters {
+            self.filter.view(f, rect);
         }
     }
 
@@ -243,31 +252,29 @@ impl<T: TableEntry + Send + Sync + 'static, R: DrawableResource + Send + Sync + 
                 self.table.update_elements(resources);
                 Ok(ComponentReturn::empty())
             }
+            ResourcesMsg::ShowFilters => {
+                self.show_filters = true;
+                Ok(ComponentReturn::empty())
+            }
+            ResourcesMsg::HideFilters => {
+                self.show_filters = false;
+                Ok(ComponentReturn::empty())
+            }
             ResourcesMsg::Back => {
                 self.focus = Focus::ResourceList;
                 Ok(ComponentReturn::action(Action::ChangeSheet))
             }
             ResourcesMsg::NextPage => {
-                if self.table.elements().len() as u32 == self.page_size {
-                    self.query = self
-                        .query
-                        .to_builder()
-                        .offset(self.query.offset() + self.page_size)
-                        .build();
-
+                if self.table.elements().len() as u32 == self.filter.query().limit() {
+                    self.filter.next_page();
                     self.fetch()
                 } else {
                     Ok(ComponentReturn::empty())
                 }
             }
             ResourcesMsg::PrevPage => {
-                if self.query.offset() > 0 {
-                    self.query = self
-                        .query
-                        .to_builder()
-                        .offset(self.query.offset() - self.page_size)
-                        .build();
-
+                if self.filter.query().offset() > 0 {
+                    self.filter.prev_page();
                     self.fetch()
                 } else {
                     Ok(ComponentReturn::empty())
@@ -299,10 +306,27 @@ impl<T: TableEntry + Send + Sync + 'static, R: DrawableResource + Send + Sync + 
                 ComponentEvent::Event(Event::Key(key)) if key.code == KeyCode::Char('r') => {
                     Ok(vec![ResourcesMsg::RefreshPage.into()])
                 }
-                _ => Self::forward_event(&mut self.table, evt, |msg| match msg {
-                    TableMsg::Local(table) => ResourcesMsg::TableEvent(TableMsg::Local(table)),
-                    TableMsg::Outer(outer) => *outer,
-                }),
+                ComponentEvent::Event(Event::Key(key)) if key.code == KeyCode::Char('f') => {
+                    Ok(vec![ResourcesMsg::ShowFilters.into()])
+                }
+                ComponentEvent::Event(Event::Key(key))
+                    if key.code == KeyCode::Esc && self.show_filters =>
+                {
+                    Ok(vec![ResourcesMsg::HideFilters.into()])
+                }
+                _ => {
+                    if self.show_filters {
+                        // self.filter.handle_event(evt)
+                        todo!()
+                    } else {
+                        Self::forward_event(&mut self.table, evt, |msg| match msg {
+                            TableMsg::Local(table) => {
+                                ResourcesMsg::TableEvent(TableMsg::Local(table))
+                            }
+                            TableMsg::Outer(outer) => *outer,
+                        })
+                    }
+                }
             },
             Focus::Resource => match evt {
                 ComponentEvent::Event(Event::Key(k)) if k.code == KeyCode::Esc => {
