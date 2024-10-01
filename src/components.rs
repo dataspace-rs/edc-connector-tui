@@ -1,6 +1,6 @@
 use std::{fmt::Debug, sync::Arc};
 
-use crossterm::event::Event;
+use crossterm::event::{Event, KeyEvent};
 use futures::{future::BoxFuture, FutureExt};
 use ratatui::{layout::Rect, Frame};
 
@@ -184,6 +184,13 @@ impl<T> ComponentMsg<T> {
 }
 
 impl<T: 'static> ComponentReturn<T> {
+    pub fn msg(msg: ComponentMsg<T>) -> ComponentReturn<T> {
+        ComponentReturn {
+            msgs: vec![msg],
+            cmds: vec![],
+            actions: vec![],
+        }
+    }
     pub fn cmd(
         cmd: BoxFuture<'static, anyhow::Result<Vec<ComponentMsg<T>>>>,
     ) -> ComponentReturn<T> {
@@ -263,7 +270,13 @@ pub trait ActionHandler {
     fn handle_action(&mut self, action: Action) -> anyhow::Result<Vec<ComponentMsg<Self::Msg>>>;
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ComponentEvent {
     Event(Event),
+}
+
+impl From<KeyEvent> for ComponentEvent {
+    fn from(value: KeyEvent) -> Self {
+        ComponentEvent::Event(Event::Key(value))
+    }
 }
