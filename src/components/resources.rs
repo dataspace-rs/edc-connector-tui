@@ -8,7 +8,7 @@ use super::{
 use crate::types::{connector::Connector, info::InfoSheet};
 use crossterm::event::{Event, KeyCode};
 use edc_connector_client::types::query::Query;
-use filter::Filter;
+use filter::{Filter, FilterMsg};
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use ratatui::{
@@ -41,7 +41,7 @@ pub enum Focus {
 pub struct ResourcesComponent<T: TableEntry, R: DrawableResource> {
     table: ResourceTable<T, R>,
     resource: ResourceComponent<R>,
-    filter: Filter,
+    filter: Filter<Box<ResourcesMsg<T, R>>>,
     focus: Focus,
     show_filters: bool,
     connector: Option<Connector>,
@@ -245,8 +245,11 @@ impl<T: TableEntry + Send + Sync + 'static, R: DrawableResource + Send + Sync + 
                 Ok(ComponentReturn::action(Action::ChangeSheet))
             }
             ResourcesMsg::ResourceSelected(selected) => self.single_fetch(selected),
-            ResourcesMsg::TableEvent(table) => {
-                Self::forward_update(&mut self.table, table.into(), ResourcesMsg::TableEvent).await
+            ResourcesMsg::TableMsg(table) => {
+                Self::forward_update(&mut self.table, table.into(), ResourcesMsg::TableMsg).await
+            }
+            ResourcesMsg::FilterMsg(filter) => {
+                Self::forward_update(&mut self.filter, filter.into(), ResourcesMsg::FilterMsg).await
             }
             ResourcesMsg::ResourcesFetched(resources) => {
                 self.table.update_elements(resources);
@@ -296,37 +299,39 @@ impl<T: TableEntry + Send + Sync + 'static, R: DrawableResource + Send + Sync + 
         evt: ComponentEvent,
     ) -> anyhow::Result<Vec<ComponentMsg<Self::Msg>>> {
         match self.focus {
-            Focus::ResourceList => match evt {
-                ComponentEvent::Event(Event::Key(key)) if key.code == KeyCode::Char('n') => {
+            Focus::ResourceList => match (evt, self.show_filters) {
+                (ComponentEvent::Event(Event::Key(key)), false)
+                    if key.code == KeyCode::Char('n') =>
+                {
                     Ok(vec![ResourcesMsg::NextPage.into()])
                 }
-                ComponentEvent::Event(Event::Key(key)) if key.code == KeyCode::Char('p') => {
+                (ComponentEvent::Event(Event::Key(key)), false)
+                    if key.code == KeyCode::Char('p') =>
+                {
                     Ok(vec![ResourcesMsg::PrevPage.into()])
                 }
-                ComponentEvent::Event(Event::Key(key)) if key.code == KeyCode::Char('r') => {
+                (ComponentEvent::Event(Event::Key(key)), false)
+                    if key.code == KeyCode::Char('r') =>
+                {
                     Ok(vec![ResourcesMsg::RefreshPage.into()])
                 }
-                ComponentEvent::Event(Event::Key(key)) if key.code == KeyCode::Char('f') => {
+                (ComponentEvent::Event(Event::Key(key)), false)
+                    if key.code == KeyCode::Char('f') =>
+                {
                     Ok(vec![ResourcesMsg::ShowFilters.into()])
                 }
-                ComponentEvent::Event(Event::Key(key))
-                    if key.code == KeyCode::Esc && self.show_filters =>
-                {
+                (ComponentEvent::Event(Event::Key(key)), true) if key.code == KeyCode::Esc => {
                     Ok(vec![ResourcesMsg::HideFilters.into()])
                 }
-                _ => {
-                    if self.show_filters {
-                        // self.filter.handle_event(evt)
-                        todo!()
-                    } else {
-                        Self::forward_event(&mut self.table, evt, |msg| match msg {
-                            TableMsg::Local(table) => {
-                                ResourcesMsg::TableEvent(TableMsg::Local(table))
-                            }
-                            TableMsg::Outer(outer) => *outer,
-                        })
-                    }
-                }
+                (evt, true) => Self::forward_event(&mut self.filter, evt, |msg| match msg {
+                    FilterMsg::Local(filter) => ResourcesMsg::FilterMsg(FilterMsg::Local(filter)),
+                    FilterMsg::Outer(outer) => *outer,
+                }),
+
+                (evt, false) => Self::forward_event(&mut self.table, evt, |msg| match msg {
+                    TableMsg::Local(table) => ResourcesMsg::TableMsg(TableMsg::Local(table)),
+                    TableMsg::Outer(outer) => *outer,
+                }),
             },
             Focus::Resource => match evt {
                 ComponentEvent::Event(Event::Key(k)) if k.code == KeyCode::Esc => {

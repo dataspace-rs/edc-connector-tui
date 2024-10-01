@@ -1,42 +1,38 @@
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use edc_connector_client::types::query::Query;
 use ratatui::{
     layout::{Alignment, Constraint, Flex, Layout, Rect},
     style::{Color, Style},
     text::Span,
-    widgets::{block::Title, Block, Borders, Clear},
+    widgets::{block::Title, Block, Borders, Clear, Widget},
     Frame,
 };
-use tui_textarea::TextArea;
+use tui_textarea::{Input, TextArea};
 
-use crate::components::Component;
+use crate::components::{Component, ComponentEvent, ComponentMsg, ComponentReturn};
 
-use super::{msg::ResourcesMsg, resource::msg::ResourceMsg};
+pub type OnConfirm<M> = Box<dyn Fn(Query) -> M + Send + Sync>;
 
-pub struct Filter {
+pub struct Filter<M> {
     query: Query,
-    limit: TextArea<'static>,
-    sort_field: TextArea<'static>,
-    sort_order: TextArea<'static>,
-    focus: Focus,
+    fields: Vec<FormField>,
+    on_confirm: Option<OnConfirm<M>>,
+    selected_field: usize,
 }
 
-#[derive(PartialEq, Eq)]
-enum Focus {
-    Limit,
-    SortField,
-    SortOrder,
-}
-
-impl Filter {
+impl<M> Filter<M> {
     pub fn new(query: Query) -> Self {
         let mut limit = TextArea::default();
         limit.insert_str(format!("{}", query.limit()));
         Self {
             query,
-            limit,
-            sort_field: TextArea::default(),
-            sort_order: TextArea::default(),
-            focus: Focus::Limit,
+            fields: vec![
+                FormField::new("Limit", true),
+                FormField::new("Sort Field", false),
+                FormField::new("Sort Order", false),
+            ],
+            on_confirm: None,
+            selected_field: 0,
         }
     }
 
@@ -68,22 +64,80 @@ impl Filter {
         area
     }
 
-    fn configure_text_area(text_area: &mut TextArea<'static>, title: &'static str, selected: bool) {
-        text_area.set_block(Block::default().borders(Borders::all()).title(title));
-        text_area.set_cursor_line_style(Style::default());
+    fn append_input(&mut self, input: Input) {
+        self.fields[self.selected_field].text.input(input);
+    }
 
-        if !selected {
-            text_area.set_cursor_style(Style::default());
+    fn move_up(&mut self) {
+        if self.selected_field != 0 {
+            self.fields[self.selected_field].set_selected(false);
+            self.selected_field -= 1;
+            self.fields[self.selected_field].set_selected(true);
+        }
+    }
+
+    fn move_down(&mut self) {
+        if self.selected_field != self.fields.len() - 1 {
+            self.fields[self.selected_field].set_selected(false);
+            self.selected_field += 1;
+            self.fields[self.selected_field].set_selected(true);
+        };
+    }
+
+    fn handle_key(&self, key: KeyEvent) -> Vec<ComponentMsg<FilterMsg<M>>> {
+        match (key.code, key.modifiers) {
+            (KeyCode::Char('j'), KeyModifiers::CONTROL) | (KeyCode::Down, _) => {
+                vec![(ComponentMsg(FilterMsg::Local(FilterLocalMsg::MoveDown)))]
+            }
+            (KeyCode::Char('k'), KeyModifiers::CONTROL) | (KeyCode::Up, _) => {
+                vec![(ComponentMsg(FilterMsg::Local(FilterLocalMsg::MoveUp)))]
+            }
+            _ => vec![(ComponentMsg(FilterMsg::Local(FilterLocalMsg::AppendInput(key.into()))))],
         }
     }
 }
 
-pub enum FilterMsg {}
+#[derive(Debug)]
+pub enum FilterMsg<M> {
+    Local(FilterLocalMsg),
+    Outer(M),
+}
 
-impl Component for Filter {
-    type Msg = FilterMsg;
+#[derive(Debug)]
+pub enum FilterLocalMsg {
+    MoveUp,
+    MoveDown,
+    AppendInput(Input),
+}
+
+#[async_trait::async_trait]
+impl<M: Send + Sync + 'static> Component for Filter<M> {
+    type Msg = FilterMsg<M>;
     type Props = Query;
 
+    fn handle_event(
+        &mut self,
+        evt: ComponentEvent,
+    ) -> anyhow::Result<Vec<ComponentMsg<Self::Msg>>> {
+        match evt {
+            ComponentEvent::Event(Event::Key(key)) => Ok(self.handle_key(key)),
+            _ => Ok(vec![]),
+        }
+    }
+
+    async fn update(
+        &mut self,
+        msg: ComponentMsg<Self::Msg>,
+    ) -> anyhow::Result<ComponentReturn<Self::Msg>> {
+        match msg.take() {
+            FilterMsg::Local(FilterLocalMsg::MoveDown) => self.move_down(),
+            FilterMsg::Local(FilterLocalMsg::MoveUp) => self.move_up(),
+            FilterMsg::Local(FilterLocalMsg::AppendInput(input)) => self.append_input(input),
+            FilterMsg::Outer(_) => todo!(),
+        };
+
+        Ok(ComponentReturn::empty())
+    }
     fn view(&mut self, f: &mut Frame, _rect: Rect) {
         let area = f.area();
 
@@ -97,27 +151,66 @@ impl Component for Filter {
         f.render_widget(Clear, area); //this clears out the background
         f.render_widget(block, area);
 
-        let layouts = Layout::vertical([
-            Constraint::Length(3),
-            Constraint::Length(3),
-            Constraint::Length(3),
-        ])
-        .split(content);
+        let constraints = (0..self.fields.len())
+            .map(|_| Constraint::Length(3))
+            .collect::<Vec<_>>();
 
-        Self::configure_text_area(&mut self.limit, "Offset", self.focus == Focus::Limit);
-        Self::configure_text_area(
-            &mut self.sort_field,
-            "Sort Field",
-            self.focus == Focus::SortField,
-        );
-        Self::configure_text_area(
-            &mut self.sort_order,
-            "Sort Order",
-            self.focus == Focus::SortOrder,
-        );
+        let layouts = Layout::vertical(constraints).split(content);
 
-        f.render_widget(&self.limit, layouts[0]);
-        f.render_widget(&self.sort_field, layouts[1]);
-        f.render_widget(&self.sort_order, layouts[2]);
+        for (idx, field) in self.fields.iter().enumerate() {
+            f.render_widget(field, layouts[idx]);
+        }
+    }
+}
+
+pub struct FormField {
+    name: String,
+    text: TextArea<'static>,
+    selected: bool,
+}
+
+impl FormField {
+    pub fn new(name: &str, selected: bool) -> Self {
+        let mut field = Self {
+            name: name.to_string(),
+            text: TextArea::default(),
+            selected,
+        };
+
+        field.configure_text_area();
+
+        field
+    }
+
+    fn configure_text_area(&mut self) {
+        let border_style = if self.selected {
+            Style::default().fg(Color::Yellow)
+        } else {
+            Style::default()
+        };
+        self.text.set_block(
+            Block::default()
+                .borders(Borders::all())
+                .border_style(border_style)
+                .title(self.name.clone()),
+        );
+        self.text.set_cursor_line_style(Style::default());
+
+        if !self.selected {
+            self.text.set_cursor_style(Style::default());
+        }
+    }
+    pub fn set_selected(&mut self, selected: bool) {
+        self.selected = selected;
+        self.configure_text_area();
+    }
+}
+
+impl Widget for &FormField {
+    fn render(self, area: Rect, buf: &mut ratatui::prelude::Buffer)
+    where
+        Self: Sized,
+    {
+        self.text.render(area, buf)
     }
 }

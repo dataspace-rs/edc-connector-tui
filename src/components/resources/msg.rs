@@ -1,6 +1,6 @@
 use crate::components::table::msg::TableMsg;
 
-use super::resource::msg::ResourceMsg;
+use super::{filter::FilterMsg, resource::msg::ResourceMsg};
 
 #[derive(Debug)]
 pub enum ResourcesMsg<T, R> {
@@ -12,7 +12,8 @@ pub enum ResourcesMsg<T, R> {
     RefreshPage,
     ShowFilters,
     HideFilters,
-    TableEvent(TableMsg<Box<ResourcesMsg<T, R>>>),
+    TableMsg(TableMsg<Box<ResourcesMsg<T, R>>>),
+    FilterMsg(FilterMsg<Box<ResourcesMsg<T, R>>>),
     ResourceMsg(ResourceMsg),
     ResourcesFetched(Vec<T>),
     ResourcesFetchFailed(String),
