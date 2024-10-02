@@ -42,6 +42,7 @@ pub struct ResourcesComponent<T: TableEntry, R: DrawableResource> {
     table: ResourceTable<T, R>,
     resource: ResourceComponent<R>,
     filter: Filter<Box<ResourcesMsg<T, R>>>,
+    query: Query,
     focus: Focus,
     show_filters: bool,
     connector: Option<Connector>,
@@ -100,7 +101,7 @@ impl<T: TableEntry + Send + Sync + 'static, R: DrawableResource + Send + Sync + 
     fn fetch(&self) -> anyhow::Result<ComponentReturn<ResourcesMsg<T, R>>> {
         if let (Some(connector), Some(on_fetch)) = (self.connector.as_ref(), self.on_fetch.as_ref())
         {
-            let query = self.filter.query().clone();
+            let query = self.query.clone();
 
             let connector = connector.clone();
             let on_fetch = on_fetch.clone();
@@ -160,14 +161,12 @@ impl<T: TableEntry + Send + Sync + 'static, R: DrawableResource + Send + Sync + 
 
     fn render_footer(&self, frame: &mut Frame, area: Rect) {
         let sort = self
-            .filter
-            .query()
+            .query
             .sort()
             .map(|s| format!("{}[{:?}]", s.field(), s.order()))
             .unwrap_or_else(|| String::from("None"));
         let filter = self
-            .filter
-            .query()
+            .query
             .filter_expression()
             .iter()
             .map(|criterion| {
@@ -182,8 +181,8 @@ impl<T: TableEntry + Send + Sync + 'static, R: DrawableResource + Send + Sync + 
 
         let text = format!(
             "Offset: {} | Limit: {} | Sort: {} | Filter: [{}]",
-            self.filter.query().offset(),
-            self.filter.query().limit(),
+            self.query.offset(),
+            self.query.limit(),
             sort,
             filter.join(" , ")
         );
@@ -205,8 +204,10 @@ impl<T: TableEntry + Clone, R: DrawableResource> Default for ResourcesComponent<
             connector: None,
             show_filters: false,
             on_fetch: None,
+            query: Query::default(),
             on_single_fetch: None,
-            filter: Filter::new(Query::default()),
+            filter: Filter::new(Query::default())
+                .on_confirm(|query| Box::new(ResourcesMsg::ChangeQuery(query))),
         }
     }
 }
@@ -249,7 +250,11 @@ impl<T: TableEntry + Send + Sync + 'static, R: DrawableResource + Send + Sync + 
                 Self::forward_update(&mut self.table, table.into(), ResourcesMsg::TableMsg).await
             }
             ResourcesMsg::FilterMsg(filter) => {
-                Self::forward_update(&mut self.filter, filter.into(), ResourcesMsg::FilterMsg).await
+                Self::forward_update(&mut self.filter, filter.into(), |msg| match msg {
+                    FilterMsg::Local(filter) => ResourcesMsg::FilterMsg(FilterMsg::Local(filter)),
+                    FilterMsg::Outer(outer) => *outer,
+                })
+                .await
             }
             ResourcesMsg::ResourcesFetched(resources) => {
                 self.table.update_elements(resources);
@@ -257,6 +262,7 @@ impl<T: TableEntry + Send + Sync + 'static, R: DrawableResource + Send + Sync + 
             }
             ResourcesMsg::ShowFilters => {
                 self.show_filters = true;
+                self.filter.set_query(self.query.clone());
                 Ok(ComponentReturn::empty())
             }
             ResourcesMsg::HideFilters => {
@@ -268,7 +274,7 @@ impl<T: TableEntry + Send + Sync + 'static, R: DrawableResource + Send + Sync + 
                 Ok(ComponentReturn::action(Action::ChangeSheet))
             }
             ResourcesMsg::NextPage => {
-                if self.table.elements().len() as u32 == self.filter.query().limit() {
+                if self.table.elements().len() as u32 == self.query.limit() {
                     self.filter.next_page();
                     self.fetch()
                 } else {
@@ -276,7 +282,7 @@ impl<T: TableEntry + Send + Sync + 'static, R: DrawableResource + Send + Sync + 
                 }
             }
             ResourcesMsg::PrevPage => {
-                if self.filter.query().offset() > 0 {
+                if self.query.offset() > 0 {
                     self.filter.prev_page();
                     self.fetch()
                 } else {
@@ -284,6 +290,11 @@ impl<T: TableEntry + Send + Sync + 'static, R: DrawableResource + Send + Sync + 
                 }
             }
             ResourcesMsg::RefreshPage => self.fetch(),
+            ResourcesMsg::ChangeQuery(query) => {
+                self.show_filters = false;
+                self.query = query;
+                self.fetch()
+            }
             ResourcesMsg::ResourceMsg(msg) => {
                 Self::forward_update(&mut self.resource, msg.into(), ResourcesMsg::ResourceMsg)
                     .await

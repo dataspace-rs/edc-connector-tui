@@ -184,6 +184,16 @@ impl<T> ComponentMsg<T> {
 }
 
 impl<T: 'static> ComponentReturn<T> {
+
+    pub fn msg(
+        msg: ComponentMsg<T>,
+    ) -> ComponentReturn<T> {
+        ComponentReturn {
+            msgs: vec![msg],
+            cmds: vec![],
+            actions: vec![],
+        }
+    }
     pub fn cmd(
         cmd: BoxFuture<'static, anyhow::Result<Vec<ComponentMsg<T>>>>,
     ) -> ComponentReturn<T> {

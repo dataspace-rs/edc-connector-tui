@@ -36,6 +36,10 @@ lazy_static = "1.5.0"
 tracing = "0.1.40"
 
 
+[patch.crates-io]
+edc-connector-client = { path = "../../edc-rs/edc-connector-client" }
+
+
 # The profile that 'cargo dist' will build with
 [profile.dist]
 inherits = "release"

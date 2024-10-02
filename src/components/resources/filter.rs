@@ -1,15 +1,17 @@
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
-use edc_connector_client::types::query::Query;
+use edc_connector_client::types::query::{Query, SortOrder};
 use ratatui::{
     layout::{Alignment, Constraint, Flex, Layout, Rect},
     style::{Color, Style},
-    text::Span,
-    widgets::{block::Title, Block, Borders, Clear, Widget},
+    text::{Line, Span},
+    widgets::{block::Title, Block, Borders, Clear, Paragraph, Widget},
     Frame,
 };
 use tui_textarea::{Input, TextArea};
 
-use crate::components::{Component, ComponentEvent, ComponentMsg, ComponentReturn};
+use crate::components::{
+    Action, Component, ComponentEvent, ComponentMsg, ComponentReturn, Notification,
+};
 
 pub type OnConfirm<M> = Box<dyn Fn(Query) -> M + Send + Sync>;
 
@@ -18,26 +20,32 @@ pub struct Filter<M> {
     fields: Vec<FormField>,
     on_confirm: Option<OnConfirm<M>>,
     selected_field: usize,
+    highlight_confirm: bool,
 }
 
 impl<M> Filter<M> {
     pub fn new(query: Query) -> Self {
-        let mut limit = TextArea::default();
-        limit.insert_str(format!("{}", query.limit()));
+        let fields = Self::fields(&query);
         Self {
             query,
-            fields: vec![
-                FormField::new("Limit", true),
-                FormField::new("Sort Field", false),
-                FormField::new("Sort Order", false),
-            ],
+            fields,
             on_confirm: None,
             selected_field: 0,
+            highlight_confirm: false,
         }
     }
 
-    pub fn query(&self) -> &Query {
-        &self.query
+    fn fields(query: &Query) -> Vec<FormField> {
+        vec![
+            FormField::with_initial("Limit", &query.limit().to_string(), true),
+            FormField::new("Sort Field", false),
+            FormField::with_initial("Sort Order", "ASC", false),
+        ]
+    }
+
+    pub fn on_confirm(mut self, cb: impl Fn(Query) -> M + Send + Sync + 'static) -> Self {
+        self.on_confirm = Some(Box::new(cb));
+        self
     }
 
     pub fn next_page(&mut self) {
@@ -69,31 +77,114 @@ impl<M> Filter<M> {
     }
 
     fn move_up(&mut self) {
-        if self.selected_field != 0 {
-            self.fields[self.selected_field].set_selected(false);
-            self.selected_field -= 1;
+        if self.highlight_confirm {
+            self.selected_field = self.fields.len() - 1;
             self.fields[self.selected_field].set_selected(true);
+            self.highlight_confirm = false;
+        } else {
+            if self.selected_field != 0 {
+                self.fields[self.selected_field].set_selected(false);
+                self.selected_field -= 1;
+                self.fields[self.selected_field].set_selected(true);
+            } else {
+                self.highlight_confirm = true;
+                self.fields[0].set_selected(false);
+            }
         }
     }
 
     fn move_down(&mut self) {
-        if self.selected_field != self.fields.len() - 1 {
-            self.fields[self.selected_field].set_selected(false);
-            self.selected_field += 1;
+        let len = self.fields.len() - 1;
+        if self.highlight_confirm {
+            self.selected_field = 0;
             self.fields[self.selected_field].set_selected(true);
-        };
+            self.highlight_confirm = false;
+        } else {
+            if self.selected_field != len {
+                self.fields[self.selected_field].set_selected(false);
+                self.selected_field += 1;
+                self.fields[self.selected_field].set_selected(true);
+            } else {
+                self.highlight_confirm = true;
+                self.fields[len].set_selected(false);
+            }
+        }
+    }
+
+    fn parse_fields(&self) -> anyhow::Result<Query> {
+        let mut query = self.query.to_builder();
+
+        if let Some(limit) = self.fields[0].text.lines().first() {
+            query = query.limit(limit.parse()?);
+        }
+
+        match (
+            self.fields[1].text.lines().first(),
+            self.fields[2].text.lines().first(),
+        ) {
+            (Some(sort_field), Some(sort_order)) => {
+                if !sort_order.is_empty() && !sort_field.is_empty() {
+                    let order = match sort_order.as_str() {
+                        "ASC" => SortOrder::Asc,
+                        "DESC" => SortOrder::Desc,
+                        _ => anyhow::bail!(
+                            "Sort order {} not supported, expected ASC or DESC",
+                            sort_order
+                        ),
+                    };
+                    query = query.sort(&sort_field, order);
+                }
+            }
+            _ => {}
+        }
+
+        Ok(query.build())
     }
 
     fn handle_key(&self, key: KeyEvent) -> Vec<ComponentMsg<FilterMsg<M>>> {
-        match (key.code, key.modifiers) {
-            (KeyCode::Char('j'), KeyModifiers::CONTROL) | (KeyCode::Down, _) => {
+        match (key.code, key.modifiers, self.highlight_confirm) {
+            (KeyCode::Char('j'), KeyModifiers::CONTROL, _)
+            | (KeyCode::Down, _, _)
+            | (KeyCode::Tab, _, _)
+            | (KeyCode::Enter, _, false) => {
                 vec![(ComponentMsg(FilterMsg::Local(FilterLocalMsg::MoveDown)))]
             }
-            (KeyCode::Char('k'), KeyModifiers::CONTROL) | (KeyCode::Up, _) => {
+            (KeyCode::Char('k'), KeyModifiers::CONTROL, _) | (KeyCode::Up, _, _) => {
                 vec![(ComponentMsg(FilterMsg::Local(FilterLocalMsg::MoveUp)))]
+            }
+            (KeyCode::Enter, _, true) => {
+                vec![ComponentMsg(FilterMsg::Local(FilterLocalMsg::Confirm))]
             }
             _ => vec![(ComponentMsg(FilterMsg::Local(FilterLocalMsg::AppendInput(key.into()))))],
         }
+    }
+
+    pub fn set_query(&mut self, query: Query) {
+        self.query = query;
+        self.fields = Self::fields(&self.query);
+        self.selected_field = 0;
+        self.highlight_confirm = false;
+    }
+}
+
+impl<M: Send + Sync + 'static> Filter<M> {
+    fn handle_confirm(&mut self) -> anyhow::Result<ComponentReturn<FilterMsg<M>>> {
+        if let Some(cb) = self.on_confirm.as_ref() {
+            match self.parse_fields() {
+                Ok(query) => {
+                    self.query = query;
+                    return Ok(ComponentReturn::msg(ComponentMsg(FilterMsg::Outer(cb(
+                        self.query.clone(),
+                    )))));
+                }
+                Err(err) => {
+                    return Ok(ComponentReturn::action(Action::Notification(
+                        Notification::error(err.to_string()),
+                    )))
+                }
+            }
+        }
+        Ok(ComponentReturn::empty())
     }
 }
 
@@ -108,6 +199,7 @@ pub enum FilterLocalMsg {
     MoveUp,
     MoveDown,
     AppendInput(Input),
+    Confirm,
 }
 
 #[async_trait::async_trait]
@@ -133,6 +225,7 @@ impl<M: Send + Sync + 'static> Component for Filter<M> {
             FilterMsg::Local(FilterLocalMsg::MoveDown) => self.move_down(),
             FilterMsg::Local(FilterLocalMsg::MoveUp) => self.move_up(),
             FilterMsg::Local(FilterLocalMsg::AppendInput(input)) => self.append_input(input),
+            FilterMsg::Local(FilterLocalMsg::Confirm) => return self.handle_confirm(),
             FilterMsg::Outer(_) => todo!(),
         };
 
@@ -151,7 +244,7 @@ impl<M: Send + Sync + 'static> Component for Filter<M> {
         f.render_widget(Clear, area); //this clears out the background
         f.render_widget(block, area);
 
-        let constraints = (0..self.fields.len())
+        let constraints = (0..=self.fields.len())
             .map(|_| Constraint::Length(3))
             .collect::<Vec<_>>();
 
@@ -160,6 +253,20 @@ impl<M: Send + Sync + 'static> Component for Filter<M> {
         for (idx, field) in self.fields.iter().enumerate() {
             f.render_widget(field, layouts[idx]);
         }
+
+        let style = if self.highlight_confirm {
+            Style::default().fg(Color::Yellow)
+        } else {
+            Style::default()
+        };
+
+        let styled_text = Span::styled("Confirm", style);
+
+        let confirm = Paragraph::new(Line::from(styled_text))
+            .centered()
+            .block(Block::default().borders(Borders::TOP));
+
+        f.render_widget(confirm, layouts[self.fields.len()]);
     }
 }
 
@@ -171,12 +278,16 @@ pub struct FormField {
 
 impl FormField {
     pub fn new(name: &str, selected: bool) -> Self {
+        Self::with_initial(name, "", selected)
+    }
+    pub fn with_initial(name: &str, value: &str, selected: bool) -> Self {
         let mut field = Self {
             name: name.to_string(),
             text: TextArea::default(),
             selected,
         };
 
+        field.text.insert_str(value);
         field.configure_text_area();
 
         field

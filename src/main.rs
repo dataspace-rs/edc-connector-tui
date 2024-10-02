@@ -10,6 +10,7 @@ mod components;
 mod config;
 mod runner;
 mod types;
+mod widgets;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
