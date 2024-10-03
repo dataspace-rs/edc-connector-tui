@@ -184,10 +184,7 @@ impl<T> ComponentMsg<T> {
 }
 
 impl<T: 'static> ComponentReturn<T> {
-
-    pub fn msg(
-        msg: ComponentMsg<T>,
-    ) -> ComponentReturn<T> {
+    pub fn msg(msg: ComponentMsg<T>) -> ComponentReturn<T> {
         ComponentReturn {
             msgs: vec![msg],
             cmds: vec![],
@@ -273,7 +270,7 @@ pub trait ActionHandler {
     fn handle_action(&mut self, action: Action) -> anyhow::Result<Vec<ComponentMsg<Self::Msg>>>;
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ComponentEvent {
     Event(Event),
 }

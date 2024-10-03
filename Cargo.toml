@@ -34,10 +34,11 @@ tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 directories = "5.0.1"
 lazy_static = "1.5.0"
 tracing = "0.1.40"
+derive_builder = "0.20.1"
 
 
 [patch.crates-io]
-edc-connector-client = { path = "../../edc-rs/edc-connector-client" }
+edc-connector-client = { path = "../edc-rs/edc-connector-client" }
 
 
 # The profile that 'cargo dist' will build with

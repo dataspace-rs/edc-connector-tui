@@ -9,8 +9,9 @@ use ratatui::{
 };
 use tui_textarea::{Input, TextArea};
 
-use crate::components::{
-    Action, Component, ComponentEvent, ComponentMsg, ComponentReturn, Notification,
+use crate::{
+    components::{Action, Component, ComponentEvent, ComponentMsg, ComponentReturn, Notification},
+    widgets::form::{msg::FormMsg, text::TextField, FieldComponent, Form},
 };
 
 pub type OnConfirm<M> = Box<dyn Fn(Query) -> M + Send + Sync>;
@@ -21,10 +22,12 @@ pub struct Filter<M> {
     on_confirm: Option<OnConfirm<M>>,
     selected_field: usize,
     highlight_confirm: bool,
+    form: Form,
 }
 
 impl<M> Filter<M> {
     pub fn new(query: Query) -> Self {
+        let form = Self::form(&query);
         let fields = Self::fields(&query);
         Self {
             query,
@@ -32,7 +35,33 @@ impl<M> Filter<M> {
             on_confirm: None,
             selected_field: 0,
             highlight_confirm: false,
+            form,
         }
+    }
+
+    fn form(query: &Query) -> Form {
+        Form::default()
+            .field(
+                TextField::builder()
+                    .name("Limit".to_string())
+                    .initial_value(query.limit().to_string())
+                    .selected(true)
+                    .build()
+                    .unwrap(),
+            )
+            .field(
+                TextField::builder()
+                    .name("Sort Field".to_string())
+                    .build()
+                    .unwrap(),
+            )
+            .field(
+                TextField::builder()
+                    .name("Sort Order".to_string())
+                    .initial_value("ASC".to_string())
+                    .build()
+                    .unwrap(),
+            )
     }
 
     fn fields(query: &Query) -> Vec<FormField> {
@@ -200,6 +229,7 @@ pub enum FilterLocalMsg {
     MoveDown,
     AppendInput(Input),
     Confirm,
+    Form(FormMsg),
 }
 
 #[async_trait::async_trait]
@@ -211,10 +241,13 @@ impl<M: Send + Sync + 'static> Component for Filter<M> {
         &mut self,
         evt: ComponentEvent,
     ) -> anyhow::Result<Vec<ComponentMsg<Self::Msg>>> {
-        match evt {
-            ComponentEvent::Event(Event::Key(key)) => Ok(self.handle_key(key)),
-            _ => Ok(vec![]),
-        }
+        Self::forward_event(&mut self.form, evt, |msg| match msg {
+            FormMsg::Local(local) => FilterMsg::Local(FilterLocalMsg::Form(FormMsg::Local(local))),
+        })
+        // match evt {
+        //     ComponentEvent::Event(Event::Key(key)) => Ok(self.handle_key(key)),
+        //     _ => Ok(vec![]),
+        // }
     }
 
     async fn update(
@@ -226,6 +259,13 @@ impl<M: Send + Sync + 'static> Component for Filter<M> {
             FilterMsg::Local(FilterLocalMsg::MoveUp) => self.move_up(),
             FilterMsg::Local(FilterLocalMsg::AppendInput(input)) => self.append_input(input),
             FilterMsg::Local(FilterLocalMsg::Confirm) => return self.handle_confirm(),
+            FilterMsg::Local(FilterLocalMsg::Form(form)) => {
+                Self::forward_update(&mut self.form, form.into(), |msg| match msg {
+                    FormMsg::Local(local) => {
+                        FilterMsg::Local(FilterLocalMsg::Form(FormMsg::Local(local)))
+                    }
+                }).await?;
+            }
             FilterMsg::Outer(_) => todo!(),
         };
 
@@ -244,29 +284,31 @@ impl<M: Send + Sync + 'static> Component for Filter<M> {
         f.render_widget(Clear, area); //this clears out the background
         f.render_widget(block, area);
 
-        let constraints = (0..=self.fields.len())
-            .map(|_| Constraint::Length(3))
-            .collect::<Vec<_>>();
+        self.form.view(f, content);
 
-        let layouts = Layout::vertical(constraints).split(content);
+        // let constraints = (0..=self.fields.len())
+        //     .map(|_| Constraint::Length(3))
+        //     .collect::<Vec<_>>();
 
-        for (idx, field) in self.fields.iter().enumerate() {
-            f.render_widget(field, layouts[idx]);
-        }
+        // let layouts = Layout::vertical(constraints).split(content);
 
-        let style = if self.highlight_confirm {
-            Style::default().fg(Color::Yellow)
-        } else {
-            Style::default()
-        };
+        // for (idx, field) in self.fields.iter().enumerate() {
+        //     f.render_widget(field, layouts[idx]);
+        // }
 
-        let styled_text = Span::styled("Confirm", style);
+        // let style = if self.highlight_confirm {
+        //     Style::default().fg(Color::Yellow)
+        // } else {
+        //     Style::default()
+        // };
 
-        let confirm = Paragraph::new(Line::from(styled_text))
-            .centered()
-            .block(Block::default().borders(Borders::TOP));
+        // let styled_text = Span::styled("Confirm", style);
 
-        f.render_widget(confirm, layouts[self.fields.len()]);
+        // let confirm = Paragraph::new(Line::from(styled_text))
+        //     .centered()
+        //     .block(Block::default().borders(Borders::TOP));
+
+        // f.render_widget(confirm, layouts[self.fields.len()]);
     }
 }
 
