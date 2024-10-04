@@ -1,6 +1,6 @@
 use std::{fmt::Debug, sync::Arc};
 
-use crossterm::event::Event;
+use crossterm::event::{Event, KeyEvent};
 use futures::{future::BoxFuture, FutureExt};
 use ratatui::{layout::Rect, Frame};
 
@@ -273,4 +273,10 @@ pub trait ActionHandler {
 #[derive(Clone, Debug)]
 pub enum ComponentEvent {
     Event(Event),
+}
+
+impl From<KeyEvent> for ComponentEvent {
+    fn from(value: KeyEvent) -> Self {
+        ComponentEvent::Event(Event::Key(value))
+    }
 }

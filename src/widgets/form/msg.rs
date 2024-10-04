@@ -9,8 +9,10 @@ pub enum FormMsg {
 pub enum FormLocalMsg {
     MoveDown,
     MoveUp,
+    FieldMsg(FieldMsg),
 }
 
+#[derive(Debug)]
 pub enum FieldMsg {
     Text(TextFieldMsg),
 }

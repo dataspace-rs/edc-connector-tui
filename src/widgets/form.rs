@@ -74,8 +74,14 @@ impl Component for Form {
         msg: ComponentMsg<Self::Msg>,
     ) -> anyhow::Result<ComponentReturn<Self::Msg>> {
         match msg.take() {
-            FormMsg::Local(FormLocalMsg::MoveUp) => dbg!(self.move_up()),
+            FormMsg::Local(FormLocalMsg::MoveUp) => self.move_up(),
             FormMsg::Local(FormLocalMsg::MoveDown) => self.move_down(),
+            FormMsg::Local(FormLocalMsg::FieldMsg(field)) => {
+                return Self::forward_update(&mut self.fields[self.selected], field.into(), |msg| {
+                    FormMsg::Local(FormLocalMsg::FieldMsg(msg))
+                })
+                .await
+            }
         };
         Ok(ComponentReturn::empty())
     }
@@ -85,29 +91,26 @@ impl Component for Form {
         evt: ComponentEvent,
     ) -> anyhow::Result<Vec<ComponentMsg<Self::Msg>>> {
         match evt {
-            ComponentEvent::Event(Event::Key(key)) => Ok(self.handle_key(key)),
+            ComponentEvent::Event(Event::Key(key)) => self.handle_key(key),
             _ => Ok(vec![]),
         }
     }
 }
 
 impl Form {
-    fn handle_key(&self, key: KeyEvent) -> Vec<ComponentMsg<FormMsg>> {
-
+    fn handle_key(&mut self, key: KeyEvent) -> anyhow::Result<Vec<ComponentMsg<FormMsg>>> {
         match (key.code, key.modifiers, true) {
             (KeyCode::Char('j'), KeyModifiers::CONTROL, _)
             | (KeyCode::Down, _, _)
             | (KeyCode::Tab, _, _)
-            | (KeyCode::Enter, _, false) => {
-                vec![FormMsg::Local(FormLocalMsg::MoveDown).into()]
-            }
+            | (KeyCode::Enter, _, false) => Ok(vec![FormMsg::Local(FormLocalMsg::MoveDown).into()]),
             (KeyCode::Char('k'), KeyModifiers::CONTROL, _) | (KeyCode::Up, _, _) => {
-                vec![FormMsg::Local(FormLocalMsg::MoveUp).into()]
+                Ok(vec![FormMsg::Local(FormLocalMsg::MoveUp).into()])
             }
-            (KeyCode::Enter, _, true) => {
-                vec![]
-            }
-            _ => vec![],
+            (KeyCode::Enter, _, true) => Ok(vec![]),
+            _ => Self::forward_event(&mut self.fields[self.selected], key.into(), |msg| {
+                FormMsg::Local(FormLocalMsg::FieldMsg(msg))
+            }),
         }
     }
 }
@@ -124,6 +127,7 @@ impl FieldComponent {
     }
 }
 
+#[async_trait::async_trait]
 impl Component for FieldComponent {
     type Msg = FieldMsg;
 
@@ -132,6 +136,26 @@ impl Component for FieldComponent {
     fn view(&mut self, f: &mut Frame, rect: Rect) {
         match self {
             FieldComponent::Text(txt) => txt.view(f, rect),
+        }
+    }
+
+    async fn update(
+        &mut self,
+        msg: ComponentMsg<Self::Msg>,
+    ) -> anyhow::Result<ComponentReturn<Self::Msg>> {
+        match (self, msg.take()) {
+            (FieldComponent::Text(text), FieldMsg::Text(msg)) => {
+                Self::forward_update(text, msg.into(), FieldMsg::Text).await
+            }
+        }
+    }
+
+    fn handle_event(
+        &mut self,
+        evt: crate::components::ComponentEvent,
+    ) -> anyhow::Result<Vec<crate::components::ComponentMsg<Self::Msg>>> {
+        match self {
+            FieldComponent::Text(text) => Self::forward_event(text, evt, FieldMsg::Text),
         }
     }
 }
