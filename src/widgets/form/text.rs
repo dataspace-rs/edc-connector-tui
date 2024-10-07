@@ -10,7 +10,6 @@ use tui_textarea::{Input, TextArea};
 
 use crate::components::{Component, ComponentEvent, ComponentMsg, ComponentReturn};
 
-use super::msg::FieldMsg;
 
 #[derive(Builder)]
 pub struct TextField {

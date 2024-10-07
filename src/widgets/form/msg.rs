@@ -1,4 +1,4 @@
-use super::text::TextFieldMsg;
+use super::{row::RowMsg, text::TextFieldMsg};
 
 #[derive(Debug)]
 pub enum FormMsg {
@@ -15,4 +15,5 @@ pub enum FormLocalMsg {
 #[derive(Debug)]
 pub enum FieldMsg {
     Text(TextFieldMsg),
+    Row(RowMsg),
 }

@@ -2,14 +2,14 @@ use edc_connector_client::types::query::{Query, SortOrder};
 use ratatui::{
     layout::{Alignment, Constraint, Flex, Layout, Rect},
     style::{Color, Style},
-    text::{ Span},
+    text::Span,
     widgets::{block::Title, Block, Borders, Clear},
     Frame,
 };
 
 use crate::{
-    components::{ Component, ComponentEvent, ComponentMsg, ComponentReturn, Notification},
-    widgets::form::{msg::FormMsg, text::TextField, FieldComponent, Form},
+    components::{Component, ComponentEvent, ComponentMsg, ComponentReturn},
+    widgets::form::{msg::FormMsg, row::RowField, text::TextField, Form},
 };
 
 pub type OnConfirm<M> = Box<dyn Fn(Query) -> M + Send + Sync>;
@@ -52,6 +52,27 @@ impl<M> Filter<M> {
                     .initial_value("ASC".to_string())
                     .build()
                     .unwrap(),
+            )
+            .field(
+                RowField::default()
+                    .field(
+                        TextField::builder()
+                            .label("LeftOperand".to_string())
+                            .build()
+                            .unwrap(),
+                    )
+                    .field(
+                        TextField::builder()
+                            .label("Operator".to_string())
+                            .build()
+                            .unwrap(),
+                    )
+                    .field(
+                        TextField::builder()
+                            .label("RightOperand".to_string())
+                            .build()
+                            .unwrap(),
+                    ),
             )
     }
 
@@ -113,7 +134,6 @@ impl<M> Filter<M> {
 
     //     Ok(query.build())
     // }
-
 
     pub fn set_query(&mut self, query: Query) {
         // self.query = query;
@@ -201,29 +221,5 @@ impl<M: Send + Sync + 'static> Component for Filter<M> {
         f.render_widget(block, area);
 
         self.form.view(f, content);
-
-        // let constraints = (0..=self.fields.len())
-        //     .map(|_| Constraint::Length(3))
-        //     .collect::<Vec<_>>();
-
-        // let layouts = Layout::vertical(constraints).split(content);
-
-        // for (idx, field) in self.fields.iter().enumerate() {
-        //     f.render_widget(field, layouts[idx]);
-        // }
-
-        // let style = if self.highlight_confirm {
-        //     Style::default().fg(Color::Yellow)
-        // } else {
-        //     Style::default()
-        // };
-
-        // let styled_text = Span::styled("Confirm", style);
-
-        // let confirm = Paragraph::new(Line::from(styled_text))
-        //     .centered()
-        //     .block(Block::default().borders(Borders::TOP));
-
-        // f.render_widget(confirm, layouts[self.fields.len()]);
     }
 }

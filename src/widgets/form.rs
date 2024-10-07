@@ -4,10 +4,12 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     Frame,
 };
+use row::RowField;
 use text::TextField;
 
 use crate::components::{Component, ComponentEvent, ComponentMsg, ComponentReturn};
 pub mod msg;
+pub mod row;
 pub mod text;
 
 pub struct Form {
@@ -58,7 +60,7 @@ impl Component for Form {
     type Props = ();
 
     fn view(&mut self, f: &mut Frame, area: Rect) {
-        let constraints = (0..=self.fields.len())
+        let constraints = (0..self.fields.len())
             .map(|_| Constraint::Length(3))
             .collect::<Vec<_>>();
 
@@ -117,12 +119,14 @@ impl Form {
 
 pub enum FieldComponent {
     Text(TextField),
+    Row(RowField),
 }
 
 impl FieldComponent {
     pub fn set_selected(&mut self, selected: bool) {
         match self {
             FieldComponent::Text(txt) => txt.set_selected(selected),
+            FieldComponent::Row(row) => row.set_selected(selected),
         }
     }
 }
@@ -136,6 +140,7 @@ impl Component for FieldComponent {
     fn view(&mut self, f: &mut Frame, rect: Rect) {
         match self {
             FieldComponent::Text(txt) => txt.view(f, rect),
+            FieldComponent::Row(row_field) => row_field.view(f, rect),
         }
     }
 
@@ -147,6 +152,10 @@ impl Component for FieldComponent {
             (FieldComponent::Text(text), FieldMsg::Text(msg)) => {
                 Self::forward_update(text, msg.into(), FieldMsg::Text).await
             }
+            (FieldComponent::Row(row), FieldMsg::Row(msg)) => {
+                Self::forward_update(row, msg.into(), FieldMsg::Row).await
+            }
+            _ => unreachable!()
         }
     }
 
@@ -156,6 +165,7 @@ impl Component for FieldComponent {
     ) -> anyhow::Result<Vec<crate::components::ComponentMsg<Self::Msg>>> {
         match self {
             FieldComponent::Text(text) => Self::forward_event(text, evt, FieldMsg::Text),
+            FieldComponent::Row(row) => Self::forward_event(row, evt, FieldMsg::Row),
         }
     }
 }
@@ -163,5 +173,10 @@ impl Component for FieldComponent {
 impl From<TextField> for FieldComponent {
     fn from(value: TextField) -> Self {
         FieldComponent::Text(value)
+    }
+}
+impl From<RowField> for FieldComponent {
+    fn from(value: RowField) -> Self {
+        FieldComponent::Row(value)
     }
 }
