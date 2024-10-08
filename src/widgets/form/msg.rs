@@ -1,4 +1,4 @@
-use super::{row::RowMsg, text::TextFieldMsg};
+use super::{button::ButtonMsg, row::RowMsg, text::TextFieldMsg};
 
 #[derive(Debug)]
 pub enum FormMsg {
@@ -9,6 +9,7 @@ pub enum FormMsg {
 pub enum FormLocalMsg {
     MoveDown,
     MoveUp,
+    Submit,
     FieldMsg(FieldMsg),
 }
 
@@ -16,4 +17,6 @@ pub enum FormLocalMsg {
 pub enum FieldMsg {
     Text(TextFieldMsg),
     Row(RowMsg),
+    Button(ButtonMsg<Box<FieldMsg>>),
+    Form(Box<FormLocalMsg>),
 }

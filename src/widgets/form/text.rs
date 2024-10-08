@@ -1,4 +1,4 @@
-use crossterm::event::Event;
+use crossterm::event::{Event, KeyCode};
 use derive_builder::Builder;
 use ratatui::{
     layout::Rect,
@@ -114,7 +114,7 @@ impl Component for TextField {
         evt: crate::components::ComponentEvent,
     ) -> anyhow::Result<Vec<crate::components::ComponentMsg<Self::Msg>>> {
         match evt {
-            ComponentEvent::Event(Event::Key(key)) => {
+            ComponentEvent::Event(Event::Key(key)) if key.code != KeyCode::Enter => {
                 Ok(vec![TextFieldMsg::AppendInput(key.into()).into()])
             }
             _ => Ok(vec![]),

@@ -9,7 +9,7 @@ use ratatui::{
 
 use crate::{
     components::{Component, ComponentEvent, ComponentMsg, ComponentReturn},
-    widgets::form::{msg::FormMsg, row::RowField, text::TextField, Form},
+    widgets::form::{button::ButtonComponent, msg::FormMsg, row::RowField, text::TextField, Form, FormButton},
 };
 
 pub type OnConfirm<M> = Box<dyn Fn(Query) -> M + Send + Sync>;
@@ -74,6 +74,7 @@ impl<M> Filter<M> {
                             .unwrap(),
                     ),
             )
+            .field(FormButton::default().label("Confirm"))
     }
 
     pub fn on_confirm(mut self, cb: impl Fn(Query) -> M + Send + Sync + 'static) -> Self {

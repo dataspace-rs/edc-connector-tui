@@ -1,3 +1,4 @@
+use button::{ButtonComponent, ButtonMsg};
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use msg::{FieldMsg, FormLocalMsg, FormMsg};
 use ratatui::{
@@ -8,9 +9,12 @@ use row::RowField;
 use text::TextField;
 
 use crate::components::{Component, ComponentEvent, ComponentMsg, ComponentReturn};
+pub mod button;
 pub mod msg;
 pub mod row;
 pub mod text;
+
+pub type FormButton = ButtonComponent<Box<FieldMsg>>;
 
 pub struct Form {
     fields: Vec<FieldComponent>,
@@ -37,8 +41,6 @@ impl Form {
             self.fields[self.selected].set_selected(false);
             self.selected -= 1;
             self.fields[self.selected].set_selected(true);
-        } else {
-            self.fields[0].set_selected(false);
         }
     }
 
@@ -48,8 +50,6 @@ impl Form {
             self.fields[self.selected].set_selected(false);
             self.selected += 1;
             self.fields[self.selected].set_selected(true);
-        } else {
-            self.fields[len].set_selected(false);
         }
     }
 }
@@ -78,11 +78,14 @@ impl Component for Form {
         match msg.take() {
             FormMsg::Local(FormLocalMsg::MoveUp) => self.move_up(),
             FormMsg::Local(FormLocalMsg::MoveDown) => self.move_down(),
-            FormMsg::Local(FormLocalMsg::FieldMsg(field)) => {
-                return Self::forward_update(&mut self.fields[self.selected], field.into(), |msg| {
+            FormMsg::Local(FormLocalMsg::FieldMsg(msg)) => {
+                return Self::forward_update(&mut self.fields[self.selected], msg.into(), |msg| {
                     FormMsg::Local(FormLocalMsg::FieldMsg(msg))
                 })
                 .await
+            }
+            FormMsg::Local(FormLocalMsg::Submit) => {
+                todo!()
             }
         };
         Ok(ComponentReturn::empty())
@@ -101,15 +104,24 @@ impl Component for Form {
 
 impl Form {
     fn handle_key(&mut self, key: KeyEvent) -> anyhow::Result<Vec<ComponentMsg<FormMsg>>> {
-        match (key.code, key.modifiers, true) {
-            (KeyCode::Char('j'), KeyModifiers::CONTROL, _)
-            | (KeyCode::Down, _, _)
-            | (KeyCode::Tab, _, _)
-            | (KeyCode::Enter, _, false) => Ok(vec![FormMsg::Local(FormLocalMsg::MoveDown).into()]),
-            (KeyCode::Char('k'), KeyModifiers::CONTROL, _) | (KeyCode::Up, _, _) => {
+        match (key.code, key.modifiers) {
+            (KeyCode::Char('j'), KeyModifiers::CONTROL)
+            | (KeyCode::Down, _)
+            | (KeyCode::Tab, _) => Ok(vec![FormMsg::Local(FormLocalMsg::MoveDown).into()]),
+            (KeyCode::Char('k'), KeyModifiers::CONTROL) | (KeyCode::Up, _) => {
                 Ok(vec![FormMsg::Local(FormLocalMsg::MoveUp).into()])
             }
-            (KeyCode::Enter, _, true) => Ok(vec![]),
+            (KeyCode::Enter, _) => {
+                let msg =
+                    Self::forward_event(&mut self.fields[self.selected], key.into(), |msg| {
+                        FormMsg::Local(FormLocalMsg::FieldMsg(msg))
+                    })?;
+                if msg.is_empty() {
+                    Ok(vec![FormMsg::Local(FormLocalMsg::MoveDown).into()])
+                } else {
+                    Ok(msg)
+                }
+            }
             _ => Self::forward_event(&mut self.fields[self.selected], key.into(), |msg| {
                 FormMsg::Local(FormLocalMsg::FieldMsg(msg))
             }),
@@ -120,6 +132,7 @@ impl Form {
 pub enum FieldComponent {
     Text(TextField),
     Row(RowField),
+    Button(ButtonComponent<Box<FieldMsg>>),
 }
 
 impl FieldComponent {
@@ -127,6 +140,7 @@ impl FieldComponent {
         match self {
             FieldComponent::Text(txt) => txt.set_selected(selected),
             FieldComponent::Row(row) => row.set_selected(selected),
+            FieldComponent::Button(button) => button.set_selected(selected),
         }
     }
 }
@@ -141,6 +155,7 @@ impl Component for FieldComponent {
         match self {
             FieldComponent::Text(txt) => txt.view(f, rect),
             FieldComponent::Row(row_field) => row_field.view(f, rect),
+            FieldComponent::Button(button) => button.view(f, rect),
         }
     }
 
@@ -155,7 +170,7 @@ impl Component for FieldComponent {
             (FieldComponent::Row(row), FieldMsg::Row(msg)) => {
                 Self::forward_update(row, msg.into(), FieldMsg::Row).await
             }
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 
@@ -166,6 +181,12 @@ impl Component for FieldComponent {
         match self {
             FieldComponent::Text(text) => Self::forward_event(text, evt, FieldMsg::Text),
             FieldComponent::Row(row) => Self::forward_event(row, evt, FieldMsg::Row),
+            FieldComponent::Button(button) => Self::forward_event(button, evt, |msg| match msg {
+                ButtonMsg::Local(button_msg_local) => {
+                    FieldMsg::Button(ButtonMsg::Local(button_msg_local))
+                }
+                ButtonMsg::Outer(outer) => *outer,
+            }),
         }
     }
 }
@@ -178,5 +199,13 @@ impl From<TextField> for FieldComponent {
 impl From<RowField> for FieldComponent {
     fn from(value: RowField) -> Self {
         FieldComponent::Row(value)
+    }
+}
+
+impl From<ButtonComponent<Box<FieldMsg>>> for FieldComponent {
+    fn from(value: ButtonComponent<Box<FieldMsg>>) -> Self {
+        FieldComponent::Button(
+            value.on_click(|| Box::new(FieldMsg::Form(Box::new(FormLocalMsg::Submit)))),
+        )
     }
 }
