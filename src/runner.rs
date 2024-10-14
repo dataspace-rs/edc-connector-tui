@@ -4,7 +4,9 @@ use crossterm::event;
 use ratatui::{backend::Backend, Terminal};
 use tokio::sync::Mutex;
 
-use crate::components::{Action, ActionHandler, Component, ComponentEvent, ComponentMsg};
+use crate::components::{
+    Action, ActionHandler, Component, ComponentEvent, ComponentMsg, Notification,
+};
 
 pub struct Runner<C: Component> {
     tick_rate: Duration,
@@ -55,23 +57,28 @@ impl<C: Component + ActionHandler<Msg = <C as Component>::Msg> + Send> Runner<C>
 
             while let Some(msg) = msgs.pop_front() {
                 let actions = {
-                    let ret = self.component.update(msg).await?;
-
-                    for m in ret.msgs {
-                        msgs.push_back(m);
-                    }
-
-                    for c in ret.cmds {
-                        let inner_async_msg = async_msgs.clone();
-                        tokio::task::spawn(async move {
-                            for m in c.await.unwrap() {
-                                let mut msg_guard = inner_async_msg.lock().await;
-                                msg_guard.push_back(m);
+                    match self.component.update(msg).await {
+                        Ok(ret) => {
+                            for m in ret.msgs {
+                                msgs.push_back(m);
                             }
-                        });
-                    }
 
-                    ret.actions
+                            for c in ret.cmds {
+                                let inner_async_msg = async_msgs.clone();
+                                tokio::task::spawn(async move {
+                                    for m in c.await.unwrap() {
+                                        let mut msg_guard = inner_async_msg.lock().await;
+                                        msg_guard.push_back(m);
+                                    }
+                                });
+                            }
+
+                            ret.actions
+                        }
+                        Err(err) => {
+                            vec![Action::Notification(Notification::error(err.to_string()))]
+                        }
+                    }
                 };
 
                 for a in actions {

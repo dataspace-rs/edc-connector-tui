@@ -8,6 +8,7 @@ use super::{
 use crate::types::{connector::Connector, info::InfoSheet};
 use crossterm::event::{Event, KeyCode};
 use edc_connector_client::types::query::Query;
+use filter::{Filter, FilterMsg};
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use ratatui::{
@@ -19,6 +20,7 @@ use ratatui::{
 };
 use serde::Serialize;
 use std::future::Future;
+pub mod filter;
 pub mod msg;
 pub mod resource;
 
@@ -39,12 +41,13 @@ pub enum Focus {
 pub struct ResourcesComponent<T: TableEntry, R: DrawableResource> {
     table: ResourceTable<T, R>,
     resource: ResourceComponent<R>,
+    filter: Filter<Box<ResourcesMsg<T, R>>>,
+    query: Query,
     focus: Focus,
+    show_filters: bool,
     connector: Option<Connector>,
     on_fetch: Option<OnFetch<T>>,
     on_single_fetch: Option<OnSingleFetch<T, R>>,
-    query: Query,
-    page_size: u32,
 }
 
 impl<T: TableEntry + Send + Sync + 'static, R: DrawableResource + Send + Sync + 'static>
@@ -92,6 +95,7 @@ impl<T: TableEntry + Send + Sync + 'static, R: DrawableResource + Send + Sync + 
             .key_binding("<n>", "Next Page")
             .key_binding("<p>", "Prev page")
             .key_binding("<r>", "Refresh page")
+            .key_binding("<f>", "Filters")
     }
 
     fn fetch(&self) -> anyhow::Result<ComponentReturn<ResourcesMsg<T, R>>> {
@@ -198,10 +202,12 @@ impl<T: TableEntry + Clone, R: DrawableResource> Default for ResourcesComponent<
             resource: ResourceComponent::new(R::title().to_string()),
             focus: Focus::ResourceList,
             connector: None,
+            show_filters: false,
             on_fetch: None,
-            on_single_fetch: None,
             query: Query::default(),
-            page_size: 50,
+            on_single_fetch: None,
+            filter: Filter::new(Query::default())
+                .on_confirm(|query| Box::new(ResourcesMsg::ChangeQuery(query))),
         }
     }
 }
@@ -222,6 +228,10 @@ impl<T: TableEntry + Send + Sync + 'static, R: DrawableResource + Send + Sync + 
         match self.focus {
             Focus::ResourceList => self.view_table(f, rect),
             Focus::Resource => self.resource.view(f, rect),
+        };
+
+        if self.show_filters {
+            self.filter.view(f, rect);
         }
     }
 
@@ -236,11 +246,27 @@ impl<T: TableEntry + Send + Sync + 'static, R: DrawableResource + Send + Sync + 
                 Ok(ComponentReturn::action(Action::ChangeSheet))
             }
             ResourcesMsg::ResourceSelected(selected) => self.single_fetch(selected),
-            ResourcesMsg::TableEvent(table) => {
-                Self::forward_update(&mut self.table, table.into(), ResourcesMsg::TableEvent).await
+            ResourcesMsg::TableMsg(table) => {
+                Self::forward_update(&mut self.table, table.into(), ResourcesMsg::TableMsg).await
+            }
+            ResourcesMsg::FilterMsg(filter) => {
+                Self::forward_update(&mut self.filter, filter.into(), |msg| match msg {
+                    FilterMsg::Local(filter) => ResourcesMsg::FilterMsg(FilterMsg::Local(filter)),
+                    FilterMsg::Outer(outer) => *outer,
+                })
+                .await
             }
             ResourcesMsg::ResourcesFetched(resources) => {
                 self.table.update_elements(resources);
+                Ok(ComponentReturn::empty())
+            }
+            ResourcesMsg::ShowFilters => {
+                self.show_filters = true;
+                self.filter.set_query(self.query.clone())?;
+                Ok(ComponentReturn::empty())
+            }
+            ResourcesMsg::HideFilters => {
+                self.show_filters = false;
                 Ok(ComponentReturn::empty())
             }
             ResourcesMsg::Back => {
@@ -248,13 +274,8 @@ impl<T: TableEntry + Send + Sync + 'static, R: DrawableResource + Send + Sync + 
                 Ok(ComponentReturn::action(Action::ChangeSheet))
             }
             ResourcesMsg::NextPage => {
-                if self.table.elements().len() as u32 == self.page_size {
-                    self.query = self
-                        .query
-                        .to_builder()
-                        .offset(self.query.offset() + self.page_size)
-                        .build();
-
+                if self.table.elements().len() as u32 == self.query.limit() {
+                    self.filter.next_page();
                     self.fetch()
                 } else {
                     Ok(ComponentReturn::empty())
@@ -262,18 +283,18 @@ impl<T: TableEntry + Send + Sync + 'static, R: DrawableResource + Send + Sync + 
             }
             ResourcesMsg::PrevPage => {
                 if self.query.offset() > 0 {
-                    self.query = self
-                        .query
-                        .to_builder()
-                        .offset(self.query.offset() - self.page_size)
-                        .build();
-
+                    self.filter.prev_page();
                     self.fetch()
                 } else {
                     Ok(ComponentReturn::empty())
                 }
             }
             ResourcesMsg::RefreshPage => self.fetch(),
+            ResourcesMsg::ChangeQuery(query) => {
+                self.show_filters = false;
+                self.query = query;
+                self.fetch()
+            }
             ResourcesMsg::ResourceMsg(msg) => {
                 Self::forward_update(&mut self.resource, msg.into(), ResourcesMsg::ResourceMsg)
                     .await
@@ -289,18 +310,37 @@ impl<T: TableEntry + Send + Sync + 'static, R: DrawableResource + Send + Sync + 
         evt: ComponentEvent,
     ) -> anyhow::Result<Vec<ComponentMsg<Self::Msg>>> {
         match self.focus {
-            Focus::ResourceList => match evt {
-                ComponentEvent::Event(Event::Key(key)) if key.code == KeyCode::Char('n') => {
+            Focus::ResourceList => match (evt, self.show_filters) {
+                (ComponentEvent::Event(Event::Key(key)), false)
+                    if key.code == KeyCode::Char('n') =>
+                {
                     Ok(vec![ResourcesMsg::NextPage.into()])
                 }
-                ComponentEvent::Event(Event::Key(key)) if key.code == KeyCode::Char('p') => {
+                (ComponentEvent::Event(Event::Key(key)), false)
+                    if key.code == KeyCode::Char('p') =>
+                {
                     Ok(vec![ResourcesMsg::PrevPage.into()])
                 }
-                ComponentEvent::Event(Event::Key(key)) if key.code == KeyCode::Char('r') => {
+                (ComponentEvent::Event(Event::Key(key)), false)
+                    if key.code == KeyCode::Char('r') =>
+                {
                     Ok(vec![ResourcesMsg::RefreshPage.into()])
                 }
-                _ => Self::forward_event(&mut self.table, evt, |msg| match msg {
-                    TableMsg::Local(table) => ResourcesMsg::TableEvent(TableMsg::Local(table)),
+                (ComponentEvent::Event(Event::Key(key)), false)
+                    if key.code == KeyCode::Char('f') =>
+                {
+                    Ok(vec![ResourcesMsg::ShowFilters.into()])
+                }
+                (ComponentEvent::Event(Event::Key(key)), true) if key.code == KeyCode::Esc => {
+                    Ok(vec![ResourcesMsg::HideFilters.into()])
+                }
+                (evt, true) => Self::forward_event(&mut self.filter, evt, |msg| match msg {
+                    FilterMsg::Local(filter) => ResourcesMsg::FilterMsg(FilterMsg::Local(filter)),
+                    FilterMsg::Outer(outer) => *outer,
+                }),
+
+                (evt, false) => Self::forward_event(&mut self.table, evt, |msg| match msg {
+                    TableMsg::Local(table) => ResourcesMsg::TableMsg(TableMsg::Local(table)),
                     TableMsg::Outer(outer) => *outer,
                 }),
             },
