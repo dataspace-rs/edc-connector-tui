@@ -129,7 +129,8 @@ impl App {
 
     pub fn info_sheet() -> InfoSheet {
         InfoSheet::default()
-            .key_binding("<tab>", "Switch menu")
+            .key_binding("<tab>", "Next menu")
+            .key_binding("<tab+shift>", "Prev menu")
             .key_binding("<esc>", "Back/Clear")
             .key_binding("<:>", "Launch bar")
             .key_binding("<:q>", "Quit")
@@ -143,12 +144,13 @@ impl App {
         self.footer.show_notification(noty);
 
         Ok(ComponentReturn::cmd(
-            async move {
-                tokio::time::sleep(Duration::from_secs(timeout)).await;
-                Ok(vec![AppMsg::NontificationMsg(NotificationMsg::Clear).into()])
-            }
-            .boxed(),
+            Self::clear_notification_cmd(timeout).boxed(),
         ))
+    }
+
+    async fn clear_notification_cmd(timeout: u64) -> anyhow::Result<Vec<ComponentMsg<AppMsg>>> {
+        tokio::time::sleep(Duration::from_secs(timeout)).await;
+        Ok(vec![AppMsg::NontificationMsg(NotificationMsg::Clear).into()])
     }
 
     pub fn clear_notification(&mut self) -> anyhow::Result<ComponentReturn<AppMsg>> {
@@ -182,91 +184,60 @@ impl App {
         self.launch_bar.clear();
         self.header.set_selected_menu(nav);
         self.change_sheet()?;
-        match self.header.selected_menu() {
-            Menu::Connectors => {
+        match (self.header.selected_menu(), self.connectors.selected()) {
+            (Menu::Connectors, _) => {
                 self.focus = AppFocus::ConnectorList;
                 Ok(ComponentReturn::empty())
             }
-            Menu::Assets => {
+            (Menu::Assets, Some(connector)) => {
                 self.focus = AppFocus::Assets;
-                if let Some(connector) = self.connectors.selected() {
-                    return Self::forward_init(
-                        &mut self.assets,
-                        connector.clone(),
-                        AppMsg::AssetsMsg,
-                    )
-                    .await;
-                }
-                Ok(ComponentReturn::empty())
+                Self::forward_init(&mut self.assets, connector.clone(), AppMsg::AssetsMsg).await
             }
-            Menu::Policies => {
+            (Menu::Policies, Some(connector)) => {
                 self.focus = AppFocus::Policies;
-                if let Some(connector) = self.connectors.selected() {
-                    return Self::forward_init(
-                        &mut self.policies,
-                        connector.clone(),
-                        AppMsg::PoliciesMsg,
-                    )
-                    .await;
-                }
-                Ok(ComponentReturn::empty())
+                Self::forward_init(&mut self.policies, connector.clone(), AppMsg::PoliciesMsg).await
             }
-            Menu::ContractDefinitions => {
+            (Menu::ContractDefinitions, Some(connector)) => {
                 self.focus = AppFocus::ContractDefinitions;
-                if let Some(connector) = self.connectors.selected() {
-                    return Self::forward_init(
-                        &mut self.contract_definitions,
-                        connector.clone(),
-                        AppMsg::ContractDefinitions,
-                    )
-                    .await;
-                }
-                Ok(ComponentReturn::empty())
+                Self::forward_init(
+                    &mut self.contract_definitions,
+                    connector.clone(),
+                    AppMsg::ContractDefinitions,
+                )
+                .await
             }
-            Menu::ContractAgreements => {
+            (Menu::ContractAgreements, Some(connector)) => {
                 self.focus = AppFocus::ContractAgreements;
-                if let Some(connector) = self.connectors.selected() {
-                    return Self::forward_init(
-                        &mut self.contract_agreements,
-                        connector.clone(),
-                        AppMsg::ContractAgreements,
-                    )
-                    .await;
-                }
-                Ok(ComponentReturn::empty())
+                Self::forward_init(
+                    &mut self.contract_agreements,
+                    connector.clone(),
+                    AppMsg::ContractAgreements,
+                )
+                .await
             }
-            Menu::ContractNegotiations => {
+            (Menu::ContractNegotiations, Some(connector)) => {
                 self.focus = AppFocus::ContractNegotiations;
-                if let Some(connector) = self.connectors.selected() {
-                    return Self::forward_init(
-                        &mut self.contract_negotiations,
-                        connector.clone(),
-                        AppMsg::ContractNegotiations,
-                    )
-                    .await;
-                }
-                Ok(ComponentReturn::empty())
+                Self::forward_init(
+                    &mut self.contract_negotiations,
+                    connector.clone(),
+                    AppMsg::ContractNegotiations,
+                )
+                .await
             }
-            Menu::TransferProcesses => {
+            (Menu::TransferProcesses, Some(connector)) => {
                 self.focus = AppFocus::TransferProcesses;
-                if let Some(connector) = self.connectors.selected() {
-                    return Self::forward_init(
-                        &mut self.transfer_processes,
-                        connector.clone(),
-                        AppMsg::TransferProcesses,
-                    )
-                    .await;
-                }
-                Ok(ComponentReturn::empty())
+                Self::forward_init(
+                    &mut self.transfer_processes,
+                    connector.clone(),
+                    AppMsg::TransferProcesses,
+                )
+                .await
             }
-            Menu::Edrs => {
+            (Menu::Edrs, Some(connector)) => {
                 self.focus = AppFocus::Edrs;
-                if let Some(connector) = self.connectors.selected() {
-                    return Self::forward_init(&mut self.edrs, connector.clone(), AppMsg::Edrs)
-                        .await;
-                }
-                Ok(ComponentReturn::empty())
+                Self::forward_init(&mut self.edrs, connector.clone(), AppMsg::Edrs).await
             }
+            (_, None) => Ok(ComponentReturn::empty()),
         }
     }
 }
@@ -412,23 +383,22 @@ impl Component for App {
             AppFocus::Edrs => Self::forward_event(&mut self.edrs, evt.clone(), AppMsg::Edrs)?,
         };
 
-        let msg = if msg.is_empty() {
-            Self::forward_event(&mut self.header, evt.clone(), AppMsg::HeaderMsg)?
-        } else {
-            msg
-        };
+        if !msg.is_empty() {
+            return Ok(msg);
+        }
 
-        if msg.is_empty() {
+        let header_msg = Self::forward_event(&mut self.header, evt.clone(), AppMsg::HeaderMsg)?;
+
+        if header_msg.is_empty() {
             if let ComponentEvent::Event(Event::Key(key)) = evt {
                 if key.kind == event::KeyEventKind::Press {
                     return Ok(Self::handle_key(key));
                 }
             }
+            Ok(vec![])
         } else {
-            return Ok(msg);
+            Ok(header_msg)
         }
-
-        Ok(vec![])
     }
 }
 

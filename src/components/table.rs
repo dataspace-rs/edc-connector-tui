@@ -72,7 +72,7 @@ impl<T: TableEntry + Send, M: Send + 'static> Component for UiTable<T, M> {
 
         if self.show_block {
             let styled_text =
-                Span::styled(format!(" {} ", self.name), Style::default().fg(Color::Red));
+                Span::styled(format!(" {} ", self.name), Style::default().fg(Color::Blue));
             let block = Block::default()
                 .title(Title::from(styled_text).alignment(Alignment::Center))
                 .borders(Borders::ALL);
@@ -139,21 +139,13 @@ impl<T: TableEntry, M> UiTable<T, M> {
 
     fn handle_key(&self, key: KeyEvent) -> Vec<ComponentMsg<TableMsg<M>>> {
         match key.code {
-            KeyCode::Enter => {
-                if let Some(cb) = self.on_select.as_ref() {
-                    if let Some(idx) = self.table_state.selected() {
-                        if let Some(element) = self.elements.get(idx) {
-                            vec![ComponentMsg(TableMsg::Outer(cb(element)))]
-                        } else {
-                            vec![]
-                        }
-                    } else {
-                        vec![]
-                    }
-                } else {
-                    vec![]
-                }
-            }
+            KeyCode::Enter => self
+                .table_state
+                .selected()
+                .and_then(|idx| self.elements.get(idx))
+                .and_then(|element| self.on_select.as_ref().map(|cb| (cb, element)))
+                .map(|(cb, element)| vec![ComponentMsg(TableMsg::Outer(cb(element)))])
+                .unwrap_or_default(),
             KeyCode::Char('j') | KeyCode::Down => {
                 vec![(ComponentMsg(TableLocalMsg::MoveDown.into()))]
             }

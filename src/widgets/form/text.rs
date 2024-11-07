@@ -92,7 +92,7 @@ impl TextField {
     }
 
     pub fn set_value(&mut self, input: &str) -> anyhow::Result<()> {
-        self.text.delete_line_by_head();
+        self.text.move_cursor(tui_textarea::CursorMove::Head);
         self.text.delete_line_by_end();
         self.text.insert_str(input);
 

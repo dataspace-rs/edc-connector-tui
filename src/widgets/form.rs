@@ -93,6 +93,19 @@ impl<M> Form<M> {
     }
 }
 
+impl<M: Send + Sync + 'static> Form<M> {
+    fn handle_enter(&mut self, key: KeyEvent) -> anyhow::Result<Vec<ComponentMsg<FormMsg<M>>>> {
+        let msg = Self::forward_event(&mut self.fields[self.selected], key.into(), |msg| {
+            FormMsg::Local(FormLocalMsg::FieldMsg(msg))
+        })?;
+        if msg.is_empty() {
+            Ok(vec![FormMsg::Local(FormLocalMsg::MoveDown).into()])
+        } else {
+            Ok(msg)
+        }
+    }
+}
+
 #[async_trait::async_trait]
 impl<M: Send + Sync + 'static> Component for Form<M> {
     type Msg = FormMsg<M>;
@@ -162,17 +175,7 @@ impl<M: Send + Sync + 'static> Form<M> {
             (KeyCode::Char('k'), KeyModifiers::CONTROL, _) | (KeyCode::Up, _, _) => {
                 Ok(vec![FormMsg::Local(FormLocalMsg::MoveUp).into()])
             }
-            (KeyCode::Enter, _, false) => {
-                let msg =
-                    Self::forward_event(&mut self.fields[self.selected], key.into(), |msg| {
-                        FormMsg::Local(FormLocalMsg::FieldMsg(msg))
-                    })?;
-                if msg.is_empty() {
-                    Ok(vec![FormMsg::Local(FormLocalMsg::MoveDown).into()])
-                } else {
-                    Ok(msg)
-                }
-            }
+            (KeyCode::Enter, _, false) => self.handle_enter(key),
             (KeyCode::Enter, _, true) => {
                 Self::forward_event(&mut self.confirm, key.into(), |msg| match msg {
                     ButtonMsg::Outer(msg) => FormMsg::Local(msg),

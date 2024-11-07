@@ -2,18 +2,21 @@ use app::App;
 use clap::{Parser, Subcommand};
 use config::{default_file, Config, ConnectorConfig};
 use edc_connector_client::{Auth, EdcConnectorClient};
+use logging::initialize_logging;
 use runner::Runner;
 use std::{path::PathBuf, time::Duration};
 use types::connector::{Connector, ConnectorStatus};
 mod app;
 mod components;
 mod config;
+mod logging;
 mod runner;
 mod types;
 mod widgets;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    initialize_logging()?;
     let cli = Cli::parse();
     tui::install_panic_hook();
     let terminal = tui::init_terminal()?;

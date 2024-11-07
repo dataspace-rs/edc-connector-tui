@@ -1,4 +1,4 @@
-use crossterm::event::{Event, KeyCode, KeyEventKind};
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use enum_ordinalize::Ordinalize;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -80,6 +80,19 @@ impl Component for HeaderComponent {
                     self.menu.clone().into(),
                 )))
             }
+            HeaderMsg::PrevTab => {
+                let current = self.menu.clone();
+                let initial = if self.menu.ordinal() == 0 {
+                    Menu::VALUES.len()
+                } else {
+                    self.menu.ordinal()
+                };
+                let idx = (initial - 1) % Menu::VALUES.len();
+                self.menu = Menu::from_ordinal(idx).unwrap_or(current);
+                Ok(ComponentReturn::action(super::Action::NavTo(
+                    self.menu.clone().into(),
+                )))
+            }
         }
     }
 
@@ -88,10 +101,22 @@ impl Component for HeaderComponent {
         evt: ComponentEvent,
     ) -> anyhow::Result<Vec<ComponentMsg<Self::Msg>>> {
         if let ComponentEvent::Event(Event::Key(key)) = evt {
-            if key.kind == KeyEventKind::Press && key.code == KeyCode::Tab {
-                return Ok(vec![HeaderMsg::NextTab.into()]);
-            }
+            return Ok(self.handle_key(key));
         }
         Ok(vec![])
+    }
+}
+
+impl HeaderComponent {
+    fn handle_key(&self, key: KeyEvent) -> Vec<ComponentMsg<HeaderMsg>> {
+        match key.code {
+            KeyCode::Tab if key.modifiers.is_empty() => {
+                vec![HeaderMsg::NextTab.into()]
+            }
+            KeyCode::BackTab if key.modifiers == KeyModifiers::SHIFT => {
+                vec![HeaderMsg::PrevTab.into()]
+            }
+            _ => vec![],
+        }
     }
 }

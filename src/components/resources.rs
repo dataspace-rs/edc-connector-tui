@@ -144,8 +144,10 @@ impl<T: TableEntry + Send + Sync + 'static, R: DrawableResource + Send + Sync + 
     }
 
     fn view_table(&mut self, f: &mut Frame, area: Rect) {
-        let styled_text =
-            Span::styled(format!(" {} ", R::title()), Style::default().fg(Color::Red));
+        let styled_text = Span::styled(
+            format!(" {} ", R::title()),
+            Style::default().fg(Color::Cyan),
+        );
         let block = Block::default()
             .title(Title::from(styled_text).alignment(Alignment::Center))
             .borders(Borders::ALL);
