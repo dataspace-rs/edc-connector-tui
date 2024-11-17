@@ -12,10 +12,10 @@ use filter::{Filter, FilterMsg};
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use ratatui::{
-    layout::{Alignment, Constraint, Layout, Rect},
+    layout::{Constraint, Layout, Rect},
     style::{Color, Style},
     text::{Line, Span},
-    widgets::{block::Title, Block, Borders, Paragraph},
+    widgets::{Block, Borders, Paragraph},
     Frame,
 };
 use serde::Serialize;
@@ -149,7 +149,7 @@ impl<T: TableEntry + Send + Sync + 'static, R: DrawableResource + Send + Sync + 
             Style::default().fg(Color::Cyan),
         );
         let block = Block::default()
-            .title(Title::from(styled_text).alignment(Alignment::Center))
+            .title_top(Line::from(styled_text).centered())
             .borders(Borders::ALL);
 
         let new_area = block.inner(area);

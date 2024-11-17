@@ -5,10 +5,10 @@ use crossterm::event::{Event, KeyCode, KeyEvent};
 use msg::ResourceMsg;
 use ratatui::{
     buffer::Buffer,
-    layout::{Alignment, Constraint, Layout, Rect, Size},
+    layout::{Constraint, Layout, Rect, Size},
     style::{Color, Style},
-    text::Span,
-    widgets::{block::Title, Block, BorderType, Borders, Paragraph, StatefulWidget, Widget},
+    text::{Line, Span},
+    widgets::{Block, BorderType, Borders, Paragraph, StatefulWidget, Widget},
     Frame,
 };
 use tui_scrollview::{ScrollView, ScrollViewState};
@@ -188,7 +188,7 @@ impl<T: DrawableResource + Send> Component for ResourceComponent<T> {
             Style::default().fg(Color::Red),
         );
         let block = Block::default()
-            .title(Title::from(styled_text).alignment(Alignment::Center))
+            .title_top(Line::from(styled_text).centered())
             .borders(Borders::ALL);
 
         let area = block.inner(rect);

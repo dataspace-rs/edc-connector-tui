@@ -2,10 +2,10 @@ use std::fmt::Debug;
 
 use crossterm::event::{Event, KeyCode, KeyEvent};
 use ratatui::{
-    layout::{Alignment, Rect},
+    layout::Rect,
     style::{Color, Modifier, Style},
-    text::Span,
-    widgets::{block::Title, Block, Borders, Row, Table, TableState},
+    text::{Line, Span},
+    widgets::{Block, Borders, Row, Table, TableState},
     Frame,
 };
 pub mod msg;
@@ -68,13 +68,13 @@ impl<T: TableEntry + Send, M: Send + 'static> Component for UiTable<T, M> {
         let mut table = Table::default()
             .rows(rows)
             .header(T::headers())
-            .highlight_style(Style::new().add_modifier(Modifier::REVERSED));
+            .row_highlight_style(Style::new().add_modifier(Modifier::REVERSED));
 
         if self.show_block {
             let styled_text =
                 Span::styled(format!(" {} ", self.name), Style::default().fg(Color::Blue));
             let block = Block::default()
-                .title(Title::from(styled_text).alignment(Alignment::Center))
+                .title_top(Line::from(styled_text).centered())
                 .borders(Borders::ALL);
             table = table.block(block)
         }

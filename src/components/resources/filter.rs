@@ -2,10 +2,10 @@ use std::collections::HashMap;
 
 use edc_connector_client::types::query::{Query, SortOrder};
 use ratatui::{
-    layout::{Alignment, Constraint, Flex, Layout, Rect},
+    layout::{Constraint, Flex, Layout, Rect},
     style::{Color, Style},
-    text::Span,
-    widgets::{block::Title, Block, Borders, Clear},
+    text::{Line, Span},
+    widgets::{Block, Borders, Clear},
     Frame,
 };
 
@@ -272,7 +272,7 @@ impl<M: Send + Sync + 'static> Component for Filter<M> {
 
         let styled_text = Span::styled(" Filters ", Style::default().fg(Color::Red));
         let block = Block::default()
-            .title(Title::from(styled_text).alignment(Alignment::Center))
+            .title_top(Line::from(styled_text).centered())
             .borders(Borders::ALL);
         let area = self.popup_area(area, 30, 50);
 
