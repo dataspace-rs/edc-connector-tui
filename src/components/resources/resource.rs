@@ -235,7 +235,7 @@ impl<'a> FieldWidget<'a> {
     }
 }
 
-impl<'a> Widget for FieldWidget<'a> {
+impl Widget for FieldWidget<'_> {
     fn render(self, area: Rect, buf: &mut Buffer)
     where
         Self: Sized,
