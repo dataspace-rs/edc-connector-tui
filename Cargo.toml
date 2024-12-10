@@ -30,7 +30,7 @@ arboard = { version = "3.4.0", features = ["wayland-data-control"] }
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 tui-scrollview = "0.5.1"
 tracing-error = "0.2.1"
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 directories = "5.0.1"
 lazy_static = "1.5.0"
 tracing = "0.1.41"
