@@ -6,6 +6,7 @@ use crate::{
         assets::AssetEntry,
         contract_definitions::ContractDefinitionEntry,
         contract_negotiations::ContractNegotiationEntry,
+        dataplanes::DataPlaneEntry,
         edrs::{EdrEntry, EdrMetadataEntry},
         policies::PolicyDefinitionEntry,
         transfer_processes::TransferProcessEntry,
@@ -98,6 +99,21 @@ impl App {
             .map(EdrMetadataEntry::new)
             .collect())
     }
+
+    pub async fn fetch_dataplanes(
+        connector: Connector,
+        _query: Query,
+    ) -> anyhow::Result<Vec<DataPlaneEntry>> {
+        Ok(connector
+            .client()
+            .data_planes()
+            .list()
+            .await?
+            .into_iter()
+            .map(DataPlaneEntry::new)
+            .collect())
+    }
+
     pub async fn fetch_policies(
         connector: Connector,
         query: Query,
