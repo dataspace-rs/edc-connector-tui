@@ -17,10 +17,10 @@ use crate::{
     components::{
         agreements::ContractAgreementsComponent, assets::AssetsComponent,
         connectors::ConnectorsComponent, contract_definitions::ContractDefinitionsComponent,
-        contract_negotiations::ContractNegotiationsComponent, edrs::EdrsComponent, footer::Footer,
-        header::HeaderComponent, launch_bar::LaunchBar, policies::PolicyDefinitionsComponent,
-        transfer_processes::TransferProcessesComponent, Component, ComponentEvent, ComponentMsg,
-        ComponentReturn, Notification, NotificationMsg,
+        contract_negotiations::ContractNegotiationsComponent, dataplanes::DataPlanesComponent,
+        edrs::EdrsComponent, footer::Footer, header::HeaderComponent, launch_bar::LaunchBar,
+        policies::PolicyDefinitionsComponent, transfer_processes::TransferProcessesComponent,
+        Component, ComponentEvent, ComponentMsg, ComponentReturn, Notification, NotificationMsg,
     },
     config::{AuthKind, Config, ConnectorConfig},
     types::{
@@ -43,6 +43,7 @@ pub struct App {
     contract_agreements: ContractAgreementsComponent,
     transfer_processes: TransferProcessesComponent,
     edrs: EdrsComponent,
+    dataplanes: DataPlanesComponent,
     launch_bar: LaunchBar,
     launch_bar_visible: bool,
     focus: AppFocus,
@@ -109,6 +110,9 @@ impl App {
             edrs: EdrsComponent::default()
                 .on_fetch(Self::fetch_edrs)
                 .on_single_fetch(Self::single_edr),
+            dataplanes: DataPlanesComponent::default()
+                .on_fetch(Self::fetch_dataplanes)
+                .on_single_fetch(Self::identity),
             launch_bar: LaunchBar::default(),
             launch_bar_visible: false,
             focus: AppFocus::ConnectorList,
@@ -168,6 +172,7 @@ impl App {
             Menu::ContractAgreements => self.contract_agreements.info_sheet(),
             Menu::TransferProcesses => self.transfer_processes.info_sheet(),
             Menu::Edrs => self.edrs.info_sheet(),
+            Menu::DataPlanes => self.dataplanes.info_sheet(),
         };
 
         self.header.update_sheet(
@@ -237,6 +242,11 @@ impl App {
                 self.focus = AppFocus::Edrs;
                 Self::forward_init(&mut self.edrs, connector.clone(), AppMsg::Edrs).await
             }
+            (Menu::DataPlanes, Some(connector)) => {
+                self.focus = AppFocus::DataPlanes;
+                Self::forward_init(&mut self.dataplanes, connector.clone(), AppMsg::DataPlanes)
+                    .await
+            }
             (_, None) => Ok(ComponentReturn::empty()),
         }
     }
@@ -262,6 +272,7 @@ impl Component for App {
             Menu::ContractAgreements => self.contract_agreements.view(f, main[2]),
             Menu::TransferProcesses => self.transfer_processes.view(f, main[2]),
             Menu::Edrs => self.edrs.view(f, main[2]),
+            Menu::DataPlanes => self.dataplanes.view(f, main[2]),
         }
 
         self.footer.view(f, main[3]);
@@ -333,6 +344,9 @@ impl Component for App {
                 .await
             }
             AppMsg::Edrs(m) => Self::forward_update(&mut self.edrs, m.into(), AppMsg::Edrs).await,
+            AppMsg::DataPlanes(m) => {
+                Self::forward_update(&mut self.dataplanes, m.into(), AppMsg::DataPlanes).await
+            }
             AppMsg::HeaderMsg(m) => {
                 Self::forward_update(&mut self.header, m.into(), AppMsg::HeaderMsg).await
             }
@@ -381,6 +395,9 @@ impl Component for App {
                 AppMsg::TransferProcesses,
             )?,
             AppFocus::Edrs => Self::forward_event(&mut self.edrs, evt.clone(), AppMsg::Edrs)?,
+            AppFocus::DataPlanes => {
+                Self::forward_event(&mut self.dataplanes, evt.clone(), AppMsg::DataPlanes)?
+            }
         };
 
         if !msg.is_empty() {
