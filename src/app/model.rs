@@ -10,4 +10,5 @@ pub enum AppFocus {
     ContractAgreements,
     TransferProcesses,
     Edrs,
+    DataPlanes,
 }

@@ -57,3 +57,7 @@ pr-run-mode = "plan"
 [workspace.metadata.dist.dependencies.apt]
 pkg-config = '*'
 libdbus-1-dev ='*'
+
+
+[patch.crates-io]
+edc-connector-client = { path = "../edc-rs/edc-connector-client" }
