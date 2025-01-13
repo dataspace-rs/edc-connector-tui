@@ -31,7 +31,7 @@ keyring = { version = "3", features = ["apple-native", "windows-native", "sync-s
 tui-scrollview = "0.5.1"
 tracing-error = "0.2.1"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
-directories = "5.0.1"
+directories = "6.0.0"
 lazy_static = "1.5.0"
 tracing = "0.1.41"
 derive_builder = "0.20.2"
