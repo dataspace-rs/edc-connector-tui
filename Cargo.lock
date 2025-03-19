@@ -188,6 +188,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "bon"
+version = "3.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "625e90403736670c971aad50573b7db42e131970d60a14f215b61fdf24e0aa84"
+dependencies = [
+ "bon-macros",
+ "rustversion",
+]
+
+[[package]]
+name = "bon-macros"
+version = "3.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fa915c54d505ca9b9b7ac056df7797508c3b817e51609d0ed19949dd0925b872"
+dependencies = [
+ "darling",
+ "ident_case",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "rustversion",
+ "syn",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -591,10 +616,11 @@ checksum = "75b325c5dbd37f80359721ad39aca5a29fb04c89279657cffdda8736d0c0b9d2"
 
 [[package]]
 name = "edc-connector-client"
-version = "0.3.9"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "edf4db7a80d40108939a1c96c72a5eb701aafc3bd803bf772b5885b747da0be6"
+checksum = "a428f4ad9f82e85bf957f69d1ac8dbfd121faece6814309942d57a60f489d73d"
 dependencies = [
+ "bon",
  "reqwest",
  "serde",
  "serde_json",
@@ -1882,6 +1908,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "85eae3c4ed2f50dcfe72643da4befc30deadb458a9b590d720cde2f2b1e97da9"
 dependencies = [
  "zerocopy",
+]
+
+[[package]]
+name = "prettyplease"
+version = "0.2.31"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5316f57387668042f561aae71480de936257848f9c43ce528e311d89a07cadeb"
+dependencies = [
+ "proc-macro2",
+ "syn",
 ]
 
 [[package]]
