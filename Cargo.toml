@@ -14,7 +14,7 @@ readme = "README.md"
 crossterm = "0.28.1"
 ratatui = "0.29.0"
 tui-textarea = "0.7.0"
-clap = { version = "4.5.30", features = ["derive"] }
+clap = { version = "4.5.36", features = ["derive"] }
 anyhow = "1.0.96"
 dirs-next = "2.0.0"
 toml = "0.8.20"
