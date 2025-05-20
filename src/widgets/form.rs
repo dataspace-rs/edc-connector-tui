@@ -188,6 +188,7 @@ impl<M: Send + Sync + 'static> Form<M> {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone)]
 pub enum FieldComponent {
     Text(TextField),
