@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en" id="oranda" class="hacker">
+  <head>
+    <title>edc-connector-tui</title>
+    
+    
+      <link rel="icon" href="/edc-connector-tui/favicon.ico" />
+    
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    
+      <meta name="description" content="A TUI client for EDC management APIs" />
+      <meta property="og:description" content="A TUI client for EDC management APIs" />
+    
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="edc-connector-tui" />
+    
+    
+    
+    <meta http-equiv="Permissions-Policy" content="interest-cohort=()" />
+    <link rel="stylesheet" href="/edc-connector-tui/oranda-v0.6.1.css" />
+    
+    
+  </head>
+  <body>
+    <div class="container">
+      <div class="page-body">
+        
+          <div class="repo_banner">
+            <a href="https://github.com/dataspace-rs/edc-connector-tui">
+              <div class="github-icon" aria-hidden="true"></div>
+              Check out our GitHub!
+            </a>
+          </div>
+        
+
+        <main>
+          <header>
+            
+            <h1 class="title">edc-connector-tui</h1>
+            
+  <nav class="nav">
+    <ul>
+      <li><a href="/edc-connector-tui/">Home</a></li>
+
+      
+
+      
+
+      
+
+      
+
+      
+        <li><a href="/edc-connector-tui/changelog/">Changelog</a></li>
+      
+    </ul>
+  </nav>
+
+          </header>
+
+          
+
+
+    <div class="oranda-hide">
+  <h1>EDC Connector TUI</h1>
+</div>
+<div>
+  <strong>
+    A TUI client for <a href="https://github.com/eclipse-edc/Connector" rel="noopener noreferrer">EDC</a>.
+  </strong>
+</div>
+<br>
+<div>
+  <a href="https://github.com/dataspace-rs/edc-connector-tui?query=workflow%3ATests" rel="noopener noreferrer">
+    <img src="https://github.com/dataspace-rs/edc-connector-tui/workflows/Tests/badge.svg" alt="Tests status">
+  </a>
+  <a href="https://crates.io/crates/edc-connector-client" rel="noopener noreferrer">
+    <img src="https://img.shields.io/crates/d/edc-connector-client.svg?style=flat-square" alt="Download">
+  </a>
+  <a href="https://docs.rs/edc-connector-client" rel="noopener noreferrer">
+    <img src="https://img.shields.io/badge/docs-latest-blue.svg?style=flat-square" alt="docs.rs docs">
+  </a>
+   <a href="https://opensource.org/licenses/Apache-2.0" rel="noopener noreferrer">
+    <img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="license">
+  </a>
+   <a href="https://deps.rs/repo/github/dataspace-rs/edc-connector-tui" rel="noopener noreferrer">
+    <img src="https://deps.rs/repo/github/dataspace-rs/edc-connector-tui/status.svg" alt="license">
+  </a>
+</div>
+<p><img src="media/demo.gif" alt="Demo Animation"></p>
+<h3>Install</h3>
+<p>Fetch a latest release <a href="https://github.com/dataspace-rs/edc-connector-tui/releases" rel="noopener noreferrer">here</a></p>
+<p>or install with cargo</p>
+<pre style="background-color:#263238;"><span style="color:#82aaff;">cargo install edc-connector-tui
+</span></pre>
+
+<h3>Run</h3>
+<p>The TUI client can either run with a single connector configured via cli args:</p>
+<pre style="background-color:#263238;"><span style="color:#82aaff;">edc-connector-tui connector</span><span style="color:#89ddff;"> --</span><span style="color:#f78c6c;">url</span><span style="color:#82aaff;"> http://localhost:29193/management</span><span style="color:#89ddff;"> --</span><span style="color:#f78c6c;">token</span><span style="color:#82aaff;"> 123456
+</span></pre>
+
+<p>or if no args provided it will try to read connectors configuration from the file at <code>~/.config/edc-connector-tui/config.toml</code></p>
+<p>The file should contain the list of configured connectors:</p>
+<pre style="background-color:#263238;"><span style="color:#89ddff;">[[connectors]]
+</span><span style="color:#f07178;">name</span><span style="color:#89ddff;">="</span><span style="color:#c3e88d;">FirstConnector</span><span style="color:#89ddff;">"
+</span><span style="color:#f07178;">address</span><span style="color:#89ddff;">="</span><span style="color:#c3e88d;">http://localhost:29193/management</span><span style="color:#89ddff;">"
+</span><span style="color:#f07178;">auth</span><span style="color:#89ddff;">= { </span><span style="color:#f07178;">type </span><span style="color:#89ddff;">= "</span><span style="color:#c3e88d;">token</span><span style="color:#89ddff;">", </span><span style="color:#f07178;">token_alias </span><span style="color:#89ddff;">= "</span><span style="color:#c3e88d;">connector_alias</span><span style="color:#89ddff;">" }
+</span><span style="color:#eeffff;">
+</span><span style="color:#89ddff;">[[connectors]]
+</span><span style="color:#f07178;">name</span><span style="color:#89ddff;">="</span><span style="color:#c3e88d;">SecondConnector</span><span style="color:#89ddff;">"
+</span><span style="color:#f07178;">address</span><span style="color:#89ddff;">="</span><span style="color:#c3e88d;">http://myconnector.xyz/management</span><span style="color:#89ddff;">"
+</span></pre>
+
+<p>The <code>token_alias</code> is used to fetch the actual token from the system keyring for the service <code>edc-connector-tui</code>.</p>
+<p>For configuration above the <code>token</code> could be set with <code>secret-tool</code> on Linux:</p>
+<pre style="background-color:#263238;"><span style="color:#82aaff;">secret-tool store</span><span style="color:#89ddff;"> --</span><span style="color:#f78c6c;">label</span><span style="color:#89ddff;">="</span><span style="color:#c3e88d;">FirstConnector</span><span style="color:#89ddff;">"</span><span style="color:#82aaff;"> service edc-connector-tui username connector_alias
+</span></pre>
+
+<blockquote>
+<p>Altough <code>edc-connector-tui</code> builds for OSX and Windows are available, it has been only tested on Linux.
+Contributions are welcome for multiplatform support/testing</p>
+</blockquote>
+
+
+
+        </main>
+      </div>
+
+      <footer>
+        
+          <a href="https://github.com/dataspace-rs/edc-connector-tui"><div class="github-icon" aria-hidden="true"></div></a>
+        
+        <span>
+          edc-connector-tui, Apache-2.0
+        </span>
+      </footer>
+    </div>
+
+    
+    
+
+    
+
+
+  </body>
+</html>
