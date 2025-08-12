@@ -15,7 +15,7 @@ crossterm = "0.28.1"
 ratatui = "0.29.0"
 tui-textarea = "0.7.0"
 clap = { version = "4.5.38", features = ["derive"] }
-anyhow = "1.0.98"
+anyhow = "1.0.99"
 dirs-next = "2.0.0"
 toml = "0.8.22"
 futures = "0.3.31"
