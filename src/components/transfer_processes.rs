@@ -22,7 +22,7 @@ pub type TransferProcessesComponent =
     ResourcesComponent<TransferProcessEntry, TransferProcessEntry>;
 
 impl TableEntry for TransferProcessEntry {
-    fn row(&self) -> Row {
+    fn row(&self) -> Row<'_> {
         let private_properties = serde_json::to_string(self.0.private_properties()).unwrap();
         Row::new(vec![
             self.0.id().to_string(),

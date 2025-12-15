@@ -20,7 +20,7 @@ pub type ContractDefinitionsComponent =
     ResourcesComponent<ContractDefinitionEntry, ContractDefinitionEntry>;
 
 impl TableEntry for ContractDefinitionEntry {
-    fn row(&self) -> Row {
+    fn row(&self) -> Row<'_> {
         let asset_selector = serde_json::to_string(self.0.assets_selector()).unwrap();
         Row::new(vec![
             self.0.id().to_string(),

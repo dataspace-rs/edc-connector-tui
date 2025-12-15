@@ -22,7 +22,7 @@ pub type ContractAgreementsComponent =
     ResourcesComponent<ContractAgreementEntry, ContractAgreementEntry>;
 
 impl TableEntry for ContractAgreementEntry {
-    fn row(&self) -> Row {
+    fn row(&self) -> Row<'_> {
         let policy = serde_json::to_string(self.0.policy()).unwrap();
         Row::new(vec![
             self.0.id().to_string(),

@@ -20,7 +20,7 @@ impl AssetEntry {
 }
 
 impl TableEntry for AssetEntry {
-    fn row(&self) -> Row {
+    fn row(&self) -> Row<'_> {
         let properties = serde_json::to_string(self.0.properties()).unwrap();
         let private_properties = serde_json::to_string(self.0.private_properties()).unwrap();
         let data_address = serde_json::to_string(self.0.data_address()).unwrap();

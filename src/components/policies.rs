@@ -20,7 +20,7 @@ impl PolicyDefinitionEntry {
 }
 
 impl TableEntry for PolicyDefinitionEntry {
-    fn row(&self) -> ratatui::widgets::Row {
+    fn row(&self) -> ratatui::widgets::Row<'_> {
         let policy = serde_json::to_string(self.0.policy()).unwrap();
         Row::new(vec![self.0.id().to_string(), policy])
     }

@@ -4,6 +4,7 @@ use std::{
     path::PathBuf,
 };
 
+use edc_connector_client::EdcConnectorApiVersion;
 use serde::Deserialize;
 
 pub fn get_app_config_path() -> anyhow::Result<std::path::PathBuf> {
@@ -48,7 +49,18 @@ pub struct ConnectorConfig {
     name: String,
     address: String,
     #[serde(default)]
+    api_version: ConnectorApiVersion,
     auth: AuthKind,
+    #[serde(default)]
+    participant_context_id: Option<String>,
+}
+
+#[derive(Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ConnectorApiVersion {
+    #[default]
+    V3,
+    V4,
 }
 
 #[derive(Deserialize, Debug, Clone, Default)]
@@ -60,6 +72,12 @@ pub enum AuthKind {
     Token {
         token_alias: String,
     },
+    #[serde(rename = "oauth2")]
+    OAuth {
+        client_id: String,
+        token_url: String,
+        secret_alias: String,
+    },
 }
 
 impl AuthKind {
@@ -67,6 +85,7 @@ impl AuthKind {
         match self {
             AuthKind::NoAuth => "No auth",
             AuthKind::Token { .. } => "Token based",
+            AuthKind::OAuth { .. } => "OAuth2",
         }
     }
 }
@@ -77,6 +96,8 @@ impl ConnectorConfig {
             name,
             address,
             auth,
+            api_version: ConnectorApiVersion::V3,
+            participant_context_id: None,
         }
     }
 
@@ -90,5 +111,22 @@ impl ConnectorConfig {
 
     pub fn auth(&self) -> &AuthKind {
         &self.auth
+    }
+
+    pub fn version(&self) -> &ConnectorApiVersion {
+        &self.api_version
+    }
+
+    pub fn participant_context_id(&self) -> Option<&String> {
+        self.participant_context_id.as_ref()
+    }
+}
+
+impl From<ConnectorApiVersion> for EdcConnectorApiVersion {
+    fn from(version: ConnectorApiVersion) -> Self {
+        match version {
+            ConnectorApiVersion::V3 => EdcConnectorApiVersion::V3,
+            ConnectorApiVersion::V4 => EdcConnectorApiVersion::V4,
+        }
     }
 }
