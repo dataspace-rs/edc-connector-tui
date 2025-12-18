@@ -26,7 +26,7 @@ async-trait = "0.1.88"
 edc-connector-client ="0.5.0"
 enum-ordinalize = "4.3.0"
 strum = "0.26.3"
-arboard = { version = "3.5.0", features = ["wayland-data-control"] }
+arboard = { version = "3.6.1", features = ["wayland-data-control"] }
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 tui-scrollview = "0.5.1"
 tracing-error = "0.2.1"
