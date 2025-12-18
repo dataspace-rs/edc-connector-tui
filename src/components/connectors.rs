@@ -23,17 +23,21 @@ pub struct ConnectorsComponent {
 pub struct ConnectorEntry(Connector);
 
 impl TableEntry for ConnectorEntry {
-    fn row(&self) -> Row {
+    fn row(&self) -> Row<'_> {
         Row::new(vec![
             self.0.config().name(),
             self.0.config().address(),
+            match self.0.config().version() {
+                crate::config::ConnectorApiVersion::V3 => "v3",
+                crate::config::ConnectorApiVersion::V4 => "v4",
+            },
             self.0.config().auth().kind(),
             self.0.status().as_str(),
         ])
     }
 
     fn headers() -> Row<'static> {
-        Row::new(vec!["NAME", "ADDRESS", "AUTH", "STATUS"])
+        Row::new(vec!["NAME", "ADDRESS", "API VERSION", "AUTH", "STATUS"])
     }
 }
 

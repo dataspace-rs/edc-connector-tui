@@ -5,7 +5,7 @@ pub mod model;
 mod msg;
 
 use crossterm::event::{self, Event, KeyCode};
-use edc_connector_client::{Auth, EdcConnectorClient};
+use edc_connector_client::{Auth, EdcConnectorClient, OAuth2Config};
 use futures::FutureExt;
 use keyring::Entry;
 use ratatui::{
@@ -69,6 +69,42 @@ impl App {
                     ),
                 }
             }
+            AuthKind::OAuth {
+                client_id,
+                secret_alias,
+                token_url,
+            } => {
+                let entry =
+                    Entry::new(SERVICE, secret_alias).and_then(|entry| entry.get_password());
+
+                match entry {
+                    Ok(pwd) => {
+                        let cfg = OAuth2Config::builder()
+                            .client_id(client_id)
+                            .client_secret(pwd)
+                            .token_url(token_url)
+                            .build();
+
+                        match Auth::oauth(cfg) {
+                            Ok(oauth) => (ConnectorStatus::Connected, oauth),
+                            Err(_) => (
+                                ConnectorStatus::Custom(format!(
+                                    "Failed to initialize OAuth2 for alias {}",
+                                    secret_alias
+                                )),
+                                Auth::NoAuth,
+                            ),
+                        }
+                    }
+                    Err(_err) => (
+                        ConnectorStatus::Custom(format!(
+                            "Secret not found for alias {}",
+                            secret_alias
+                        )),
+                        Auth::NoAuth,
+                    ),
+                }
+            }
         }
     }
 
@@ -76,7 +112,9 @@ impl App {
         let (status, auth) = Self::auth(&cfg);
         let client = EdcConnectorClient::builder()
             .management_url(cfg.address())
+            .version(cfg.version().clone().into())
             .with_auth(auth)
+            .maybe_participant_context(cfg.participant_context_id())
             .build()
             .unwrap();
         Connector::new(cfg, client, status)

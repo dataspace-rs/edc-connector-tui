@@ -27,7 +27,7 @@ impl EdrMetadataEntry {
 }
 
 impl TableEntry for EdrMetadataEntry {
-    fn row(&self) -> Row {
+    fn row(&self) -> Row<'_> {
         Row::new(vec![
             self.0.transfer_process_id().to_string(),
             self.0.asset_id().to_string(),

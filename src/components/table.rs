@@ -49,7 +49,7 @@ impl<T: TableEntry, M> Default for UiTable<T, M> {
 }
 
 pub trait TableEntry {
-    fn row(&self) -> Row;
+    fn row(&self) -> Row<'_>;
     fn headers() -> Row<'static>;
 }
 

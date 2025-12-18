@@ -21,7 +21,7 @@ pub type DataPlaneMsg = ResourcesMsg<DataPlaneEntry, DataPlaneEntry>;
 pub type DataPlanesComponent = ResourcesComponent<DataPlaneEntry, DataPlaneEntry>;
 
 impl TableEntry for DataPlaneEntry {
-    fn row(&self) -> Row {
+    fn row(&self) -> Row<'_> {
         Row::new(vec![
             self.0.id().to_string(),
             format!("{:}", self.0.url()),
