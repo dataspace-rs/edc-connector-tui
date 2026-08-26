@@ -139,10 +139,14 @@ impl<T: TableEntry, M> UiTable<T, M> {
 
     fn handle_key(&self, key: KeyEvent) -> Vec<ComponentMsg<TableMsg<M>>> {
         match key.code {
-            KeyCode::Enter => self.on_select.as_ref().zip(self
-                .table_state
-                .selected()
-                .and_then(|idx| self.elements.get(idx)))
+            KeyCode::Enter => self
+                .on_select
+                .as_ref()
+                .zip(
+                    self.table_state
+                        .selected()
+                        .and_then(|idx| self.elements.get(idx)),
+                )
                 .map(|(cb, element)| vec![ComponentMsg(TableMsg::Outer(cb(element)))])
                 .unwrap_or_default(),
             KeyCode::Char('j') | KeyCode::Down => {
