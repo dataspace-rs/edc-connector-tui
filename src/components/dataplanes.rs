@@ -24,7 +24,7 @@ impl TableEntry for DataPlaneEntry {
     fn row(&self) -> Row<'_> {
         Row::new(vec![
             self.0.id().to_string(),
-            format!("{:}", self.0.url()),
+            self.0.url().to_string(),
             format!("{:?}", self.0.state()),
             format!("{:?}", self.0.allowed_transfer_types()),
             format!("{:?}", self.0.allowed_source_types()),
