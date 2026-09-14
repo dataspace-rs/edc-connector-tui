@@ -55,19 +55,9 @@ impl App {
     fn auth(cfg: &ConnectorConfig) -> (ConnectorStatus, Auth) {
         match cfg.auth() {
             AuthKind::NoAuth => (ConnectorStatus::Connected, Auth::NoAuth),
-            AuthKind::Token { token_alias } => {
-                let entry = Entry::new(SERVICE, token_alias).and_then(|entry| entry.get_password());
-
-                match entry {
-                    Ok(pwd) => (ConnectorStatus::Connected, Auth::api_token(pwd)),
-                    Err(_err) => (
-                        ConnectorStatus::Custom(format!(
-                            "Token not found for alias {}",
-                            token_alias
-                        )),
-                        Auth::NoAuth,
-                    ),
-                }
+            AuthKind::Token { token_alias } => Self::token_auth(token_alias, Auth::api_token),
+            AuthKind::BearerToken { token_alias } => {
+                Self::token_auth(token_alias, Auth::bearer_token)
             }
             AuthKind::OAuth {
                 client_id,
@@ -108,11 +98,22 @@ impl App {
         }
     }
 
+    fn token_auth(token_alias: &str, to_auth: fn(String) -> Auth) -> (ConnectorStatus, Auth) {
+        let entry = Entry::new(SERVICE, token_alias).and_then(|entry| entry.get_password());
+
+        match entry {
+            Ok(pwd) => (ConnectorStatus::Connected, to_auth(pwd)),
+            Err(_err) => (
+                ConnectorStatus::Custom(format!("Token not found for alias {}", token_alias)),
+                Auth::NoAuth,
+            ),
+        }
+    }
+
     fn init_connector(cfg: ConnectorConfig) -> Connector {
         let (status, auth) = Self::auth(&cfg);
         let client = EdcConnectorClient::builder()
             .management_url(cfg.address())
-            .version(cfg.version().clone().into())
             .with_auth(auth)
             .maybe_participant_context(cfg.participant_context_id())
             .build()

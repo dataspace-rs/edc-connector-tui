@@ -82,6 +82,13 @@ address="http://myconnector.xyz/management"
 
 The `token_alias` is used to fetch the actual token from the system keyring for the service `edc-connector-tui`.
 
+Supported `auth` types:
+
+- `{ type = "no-auth" }` (default when `auth` is omitted)
+- `{ type = "token", token_alias = "..." }` sends the token in the `X-Api-Key` header
+- `{ type = "bearer-token", token_alias = "..." }` sends the token as `Authorization: Bearer <token>`
+- `{ type = "oauth2", client_id = "...", token_url = "...", secret_alias = "..." }` fetches a token via OAuth2 client credentials
+
 
 For configuration above the `token` could be set with `secret-tool` on Linux:
 

@@ -28,7 +28,7 @@ impl TableEntry for ContractNegotiationEntry {
             self.0.id().to_string(),
             format!("{:?}", self.0.kind()),
             format!("{:?}", self.0.state()),
-            self.0.counter_party_id().to_string(),
+            self.0.counter_party_id().clone().unwrap_or_default(),
             self.0.contract_agreement_id().cloned().unwrap_or_default(),
             private_properties,
             self.0.created_at().to_string(),
@@ -62,7 +62,10 @@ impl DrawableResource for ContractNegotiationEntry {
             Field::string("id", self.0.id()),
             Field::string("type", format!("{:?}", self.0.kind())),
             Field::string("state", format!("{:?}", self.0.state())),
-            Field::string("counter_party_id", self.0.counter_party_id()),
+            Field::string(
+                "counter_party_id",
+                self.0.counter_party_id().clone().unwrap_or_default(),
+            ),
             Field::string("counter_party_address", self.0.counter_party_address()),
             Field::string(
                 "contract_agreement_id",

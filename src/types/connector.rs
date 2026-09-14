@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use edc_connector_client::EdcConnectorClient;
+use edc_connector_client::{EdcConnectorApiVersion, EdcConnectorClient};
 
 use crate::config::ConnectorConfig;
 
@@ -45,6 +45,10 @@ impl Connector {
 
     pub fn client(&self) -> &EdcConnectorClient {
         &self.client
+    }
+
+    pub fn api_version(&self) -> EdcConnectorApiVersion {
+        (*self.config.version()).into()
     }
 
     pub fn status(&self) -> &ConnectorStatus {

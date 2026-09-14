@@ -4,7 +4,7 @@ use super::{
     resources::{msg::ResourcesMsg, DrawableResource, FieldValue, ResourcesComponent},
     table::TableEntry,
 };
-use edc_connector_client::types::asset::Asset;
+use edc_connector_client::types::{asset::Asset, data_address::DataAddress};
 use ratatui::widgets::Row;
 
 pub type AssetsMsg = ResourcesMsg<AssetEntry, AssetEntry>;
@@ -19,16 +19,27 @@ impl AssetEntry {
     }
 }
 
+impl AssetEntry {
+    // `data_address` is deprecated upstream in favour of `dataplane_metadata`,
+    // but connectors exposing the v3 management API still return it.
+    #[allow(deprecated)]
+    fn data_address(&self) -> Option<&DataAddress> {
+        self.0.data_address()
+    }
+}
+
 impl TableEntry for AssetEntry {
     fn row(&self) -> Row<'_> {
         let properties = serde_json::to_string(self.0.properties()).unwrap();
         let private_properties = serde_json::to_string(self.0.private_properties()).unwrap();
-        let data_address = serde_json::to_string(self.0.data_address()).unwrap();
+        let data_address = serde_json::to_string(&self.data_address()).unwrap();
+        let dataplane_metadata = serde_json::to_string(&self.0.dataplane_metadata()).unwrap();
         Row::new(vec![
             self.0.id().to_string(),
             properties,
             private_properties,
             data_address,
+            dataplane_metadata,
         ])
     }
 
@@ -38,6 +49,7 @@ impl TableEntry for AssetEntry {
             "PROPERTIES",
             "PRIVATE PROPERTIES",
             "DATA ADDRESS",
+            "DATAPLANE METADATA",
         ])
     }
 }
@@ -68,7 +80,11 @@ impl DrawableResource for AssetEntry {
         ));
         fields.push(Field::new(
             "data_address".to_string(),
-            FieldValue::Json(serde_json::to_string_pretty(self.0.data_address()).unwrap()),
+            FieldValue::Json(serde_json::to_string_pretty(&self.data_address()).unwrap()),
+        ));
+        fields.push(Field::new(
+            "dataplane_metadata".to_string(),
+            FieldValue::Json(serde_json::to_string_pretty(&self.0.dataplane_metadata()).unwrap()),
         ));
 
         fields

@@ -55,12 +55,23 @@ pub struct ConnectorConfig {
     participant_context_id: Option<String>,
 }
 
-#[derive(Deserialize, Debug, Clone, Default)]
+#[derive(Deserialize, Debug, Clone, Copy, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ConnectorApiVersion {
     #[default]
     V3,
     V4,
+    V5,
+}
+
+impl ConnectorApiVersion {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ConnectorApiVersion::V3 => "v3",
+            ConnectorApiVersion::V4 => "v4",
+            ConnectorApiVersion::V5 => "v5",
+        }
+    }
 }
 
 #[derive(Deserialize, Debug, Clone, Default)]
@@ -70,6 +81,9 @@ pub enum AuthKind {
     #[default]
     NoAuth,
     Token {
+        token_alias: String,
+    },
+    BearerToken {
         token_alias: String,
     },
     #[serde(rename = "oauth2")]
@@ -85,6 +99,7 @@ impl AuthKind {
         match self {
             AuthKind::NoAuth => "No auth",
             AuthKind::Token { .. } => "Token based",
+            AuthKind::BearerToken { .. } => "Bearer token",
             AuthKind::OAuth { .. } => "OAuth2",
         }
     }
@@ -127,6 +142,7 @@ impl From<ConnectorApiVersion> for EdcConnectorApiVersion {
         match version {
             ConnectorApiVersion::V3 => EdcConnectorApiVersion::V3,
             ConnectorApiVersion::V4 => EdcConnectorApiVersion::V4,
+            ConnectorApiVersion::V5 => EdcConnectorApiVersion::V5,
         }
     }
 }

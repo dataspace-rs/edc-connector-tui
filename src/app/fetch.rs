@@ -23,7 +23,7 @@ impl App {
     ) -> anyhow::Result<Vec<AssetEntry>> {
         Ok(connector
             .client()
-            .assets()
+            .assets(connector.api_version())
             .query(query)
             .await?
             .into_iter()
@@ -37,7 +37,7 @@ impl App {
     ) -> anyhow::Result<Vec<ContractDefinitionEntry>> {
         Ok(connector
             .client()
-            .contract_definitions()
+            .contract_definitions(connector.api_version())
             .query(query)
             .await?
             .into_iter()
@@ -51,7 +51,7 @@ impl App {
     ) -> anyhow::Result<Vec<ContractNegotiationEntry>> {
         Ok(connector
             .client()
-            .contract_negotiations()
+            .contract_negotiations(connector.api_version())
             .query(query)
             .await?
             .into_iter()
@@ -65,7 +65,7 @@ impl App {
     ) -> anyhow::Result<Vec<ContractAgreementEntry>> {
         Ok(connector
             .client()
-            .contract_agreements()
+            .contract_agreements(connector.api_version())
             .query(query)
             .await?
             .into_iter()
@@ -78,7 +78,7 @@ impl App {
     ) -> anyhow::Result<Vec<TransferProcessEntry>> {
         Ok(connector
             .client()
-            .transfer_processes()
+            .transfer_processes(connector.api_version())
             .query(query)
             .await?
             .into_iter()
@@ -92,7 +92,7 @@ impl App {
     ) -> anyhow::Result<Vec<EdrMetadataEntry>> {
         Ok(connector
             .client()
-            .edrs()
+            .edrs(connector.api_version())
             .query(query)
             .await?
             .into_iter()
@@ -106,7 +106,7 @@ impl App {
     ) -> anyhow::Result<Vec<DataPlaneEntry>> {
         Ok(connector
             .client()
-            .data_planes()
+            .data_planes(connector.api_version())
             .list()
             .await?
             .into_iter()
@@ -120,7 +120,7 @@ impl App {
     ) -> anyhow::Result<Vec<PolicyDefinitionEntry>> {
         Ok(connector
             .client()
-            .policies()
+            .policies(connector.api_version())
             .query(query)
             .await?
             .into_iter()
@@ -138,7 +138,7 @@ impl App {
     ) -> anyhow::Result<EdrEntry> {
         connector
             .client()
-            .edrs()
+            .edrs(connector.api_version())
             .get_data_address(edr_entry.id())
             .await
             .map(|data_address| EdrEntry::new(edr_entry.id().to_string(), data_address))
