@@ -1,28 +1,21 @@
-use crate::types::nav::Nav;
+use crate::{types::nav::Nav, widgets::text_input::TextInput};
 
 use self::msg::LaunchBarMsg;
 use super::{Action, Component, ComponentEvent, ComponentMsg, ComponentReturn, Notification};
+use crossterm::event::{Event, KeyCode};
 use ratatui::{
     layout::Rect,
-    style::Style,
-    widgets::{Block, Borders, Widget},
+    widgets::{Block, Borders},
     Frame,
 };
-use tui_textarea::{Input, Key, TextArea};
+use tui_input::{backend::crossterm::to_input_request, Input, InputRequest};
 pub mod msg;
 
 pub static PROMPT: &str = " $> ";
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct LaunchBar {
-    pub(crate) area: TextArea<'static>,
-}
-impl Default for LaunchBar {
-    fn default() -> Self {
-        let mut area = TextArea::default();
-        area.insert_str(PROMPT);
-        Self { area }
-    }
+    input: Input,
 }
 
 #[async_trait::async_trait]
@@ -31,12 +24,12 @@ impl Component for LaunchBar {
     type Props = ();
 
     fn view(&mut self, f: &mut Frame, rect: Rect) {
-        let text_area = &mut self.area;
-        text_area.set_block(Block::default().borders(Borders::all()));
-        text_area.set_cursor_line_style(Style::default());
-        text_area.set_placeholder_text("Enter command");
-
-        self.area.render(rect, f.buffer_mut());
+        f.render_widget(
+            TextInput::new(&self.input)
+                .prefix(PROMPT)
+                .block(Block::default().borders(Borders::all())),
+            rect,
+        );
     }
 
     async fn update(
@@ -44,8 +37,8 @@ impl Component for LaunchBar {
         msg: ComponentMsg<Self::Msg>,
     ) -> anyhow::Result<ComponentReturn<Self::Msg>> {
         match msg.take() {
-            LaunchBarMsg::AppendCommand(input) => {
-                self.area.input(input);
+            LaunchBarMsg::AppendCommand(request) => {
+                self.input.handle(request);
                 Ok(ComponentReturn::empty())
             }
             LaunchBarMsg::Quit => Ok(ComponentReturn::action(Action::Quit)),
@@ -62,41 +55,111 @@ impl Component for LaunchBar {
         &mut self,
         evt: ComponentEvent,
     ) -> anyhow::Result<Vec<ComponentMsg<Self::Msg>>> {
-        match evt {
-            ComponentEvent::Event(evt) => {
-                let input: Input = evt.into();
+        let ComponentEvent::Event(Event::Key(key)) = evt else {
+            return Ok(vec![]);
+        };
 
-                let current = &self.area.lines()[0].replacen(PROMPT, "", 1);
+        let current = self.input.value();
 
-                match input.key {
-                    Key::Backspace if current.is_empty() => Ok(vec![]),
-                    Key::Char('q') if current.is_empty() => Ok(vec![
-                        LaunchBarMsg::AppendCommand(input).into(),
-                        LaunchBarMsg::AppendCommand(Input {
-                            key: Key::Char('!'),
-                            ..Default::default()
-                        })
-                        .into(),
-                    ]),
-                    Key::Tab => Ok(vec![LaunchBarMsg::Loop.into()]),
-                    Key::Enter if current == "q!" => Ok(vec![LaunchBarMsg::Quit.into()]),
-                    Key::Enter if !current.is_empty() => match current.parse::<Nav>() {
-                        Ok(nav) => Ok(vec![LaunchBarMsg::NavTo(nav).into()]),
-                        Err(err) => Ok(vec![LaunchBarMsg::Error(err.to_string()).into()]),
-                    },
-                    Key::Enter => Ok(vec![LaunchBarMsg::Esc.into()]),
-                    Key::Esc => Ok(vec![LaunchBarMsg::Esc.into()]),
-                    _ => Ok(vec![LaunchBarMsg::AppendCommand(input).into()]),
-                }
-            }
+        match key.code {
+            KeyCode::Char('q') if current.is_empty() => Ok(vec![
+                LaunchBarMsg::AppendCommand(InputRequest::InsertChar('q')).into(),
+                LaunchBarMsg::AppendCommand(InputRequest::InsertChar('!')).into(),
+            ]),
+            KeyCode::Tab => Ok(vec![LaunchBarMsg::Loop.into()]),
+            KeyCode::Enter if current == "q!" => Ok(vec![LaunchBarMsg::Quit.into()]),
+            KeyCode::Enter if !current.is_empty() => match current.parse::<Nav>() {
+                Ok(nav) => Ok(vec![LaunchBarMsg::NavTo(nav).into()]),
+                Err(err) => Ok(vec![LaunchBarMsg::Error(err.to_string()).into()]),
+            },
+            KeyCode::Enter | KeyCode::Esc => Ok(vec![LaunchBarMsg::Esc.into()]),
+            _ => Ok(to_input_request(&Event::Key(key))
+                .map(|request| LaunchBarMsg::AppendCommand(request).into())
+                .into_iter()
+                .collect()),
         }
     }
 }
 
 impl LaunchBar {
     pub fn clear(&mut self) {
-        self.area.move_cursor(tui_textarea::CursorMove::Head);
-        self.area.delete_line_by_end();
-        self.area.insert_str(PROMPT);
+        self.input.reset();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crossterm::event::KeyEvent;
+
+    fn key(code: KeyCode) -> ComponentEvent {
+        ComponentEvent::Event(Event::Key(KeyEvent::from(code)))
+    }
+
+    fn msgs(bar: &mut LaunchBar, code: KeyCode) -> Vec<LaunchBarMsg> {
+        bar.handle_event(key(code))
+            .unwrap()
+            .into_iter()
+            .map(|m| m.take())
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn typing_q_on_empty_bar_expands_to_quit_command() {
+        let mut bar = LaunchBar::default();
+        let expanded = msgs(&mut bar, KeyCode::Char('q'));
+        assert!(matches!(
+            expanded.as_slice(),
+            [
+                LaunchBarMsg::AppendCommand(InputRequest::InsertChar('q')),
+                LaunchBarMsg::AppendCommand(InputRequest::InsertChar('!')),
+            ]
+        ));
+
+        for m in expanded {
+            bar.update(m.into()).await.unwrap();
+        }
+        assert_eq!(bar.input.value(), "q!");
+        assert!(matches!(
+            msgs(&mut bar, KeyCode::Enter).as_slice(),
+            [LaunchBarMsg::Quit]
+        ));
+    }
+
+    #[tokio::test]
+    async fn enter_parses_navigation_and_clear_resets() {
+        let mut bar = LaunchBar::default();
+        for c in "assets".chars() {
+            for m in msgs(&mut bar, KeyCode::Char(c)) {
+                bar.update(m.into()).await.unwrap();
+            }
+        }
+        assert_eq!(bar.input.value(), "assets");
+        assert!(matches!(
+            msgs(&mut bar, KeyCode::Enter).as_slice(),
+            [LaunchBarMsg::NavTo(Nav::AssetsList)]
+        ));
+
+        bar.clear();
+        assert_eq!(bar.input.value(), "");
+        assert!(matches!(
+            msgs(&mut bar, KeyCode::Enter).as_slice(),
+            [LaunchBarMsg::Esc]
+        ));
+    }
+
+    #[test]
+    fn backspace_and_unknown_command() {
+        let mut bar = LaunchBar {
+            input: Input::from("nope"),
+        };
+        assert!(matches!(
+            msgs(&mut bar, KeyCode::Backspace).as_slice(),
+            [LaunchBarMsg::AppendCommand(InputRequest::DeletePrevChar)]
+        ));
+        assert!(matches!(
+            msgs(&mut bar, KeyCode::Enter).as_slice(),
+            [LaunchBarMsg::Error(_)]
+        ));
     }
 }

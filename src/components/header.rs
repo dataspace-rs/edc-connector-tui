@@ -2,7 +2,7 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use enum_ordinalize::Ordinalize;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Style, Stylize},
+    style::Style,
     widgets::{Block, Tabs},
     Frame,
 };

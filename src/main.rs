@@ -72,7 +72,7 @@ mod tui {
         panic,
     };
 
-    pub fn init_terminal() -> io::Result<Terminal<impl Backend>> {
+    pub fn init_terminal() -> io::Result<Terminal<impl Backend<Error = io::Error>>> {
         enable_raw_mode()?;
         stdout().execute(EnterAlternateScreen)?;
         let terminal = Terminal::new(CrosstermBackend::new(stdout()))?;

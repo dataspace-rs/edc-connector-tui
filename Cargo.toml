@@ -11,9 +11,9 @@ readme = "README.md"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-crossterm = "0.28.1"
-ratatui = "0.29.0"
-tui-textarea = "0.7.0"
+crossterm = "0.29.0"
+ratatui = "0.30.2"
+tui-input = "0.15.4"
 clap = { version = "4.5.53", features = ["derive"] }
 anyhow = "1.0.100"
 dirs-next = "2.0.0"
@@ -28,7 +28,7 @@ enum-ordinalize = "4.3.0"
 strum = { version = "0.28.0", features = ["derive"] }
 arboard = { version = "3.6.1", features = ["wayland-data-control"] }
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
-tui-scrollview = "0.5.1"
+tui-scrollview = "0.6.7"
 tracing-error = "0.2.1"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 directories = "6.0.0"

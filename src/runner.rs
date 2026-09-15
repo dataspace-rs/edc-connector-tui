@@ -21,7 +21,11 @@ impl<C: Component + ActionHandler<Msg = <C as Component>::Msg> + Send> Runner<C>
         }
     }
 
-    pub async fn run(&mut self, mut terminal: Terminal<impl Backend>) -> anyhow::Result<()> {
+    pub async fn run<B>(&mut self, mut terminal: Terminal<B>) -> anyhow::Result<()>
+    where
+        B: Backend,
+        B::Error: std::error::Error + Send + Sync + 'static,
+    {
         terminal.clear()?;
 
         let mut should_quit = false;
