@@ -1,4 +1,4 @@
-use edc_connector_client::types::query::Query;
+use edc_connector_client::{types::query::Query, EdcConnectorApiVersion};
 
 use crate::{
     components::{
@@ -102,16 +102,26 @@ impl App {
 
     pub async fn fetch_dataplanes(
         connector: Connector,
-        _query: Query,
+        query: Query,
     ) -> anyhow::Result<Vec<DataPlaneEntry>> {
-        Ok(connector
-            .client()
-            .data_planes(connector.api_version())
-            .list()
-            .await?
-            .into_iter()
-            .map(DataPlaneEntry::new)
-            .collect())
+        let dataplanes = match connector.api_version() {
+            EdcConnectorApiVersion::V5 => {
+                connector
+                    .client()
+                    .data_planes(connector.api_version())
+                    .query(query)
+                    .await?
+            }
+            _ => {
+                connector
+                    .client()
+                    .data_planes(connector.api_version())
+                    .list()
+                    .await?
+            }
+        };
+
+        Ok(dataplanes.into_iter().map(DataPlaneEntry::new).collect())
     }
 
     pub async fn fetch_policies(
