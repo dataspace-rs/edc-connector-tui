@@ -125,6 +125,8 @@ impl App {
         let connectors = ConnectorsComponent::new(connectors);
 
         let sheet = connectors.info_sheet().merge(Self::info_sheet());
+        let mut header = HeaderComponent::with_sheet(sheet);
+        header.set_menus(Menu::available_for(connectors.selected_version()));
 
         App {
             connectors,
@@ -156,7 +158,7 @@ impl App {
             launch_bar_visible: false,
             focus: AppFocus::ConnectorList,
             footer: Footer::default(),
-            header: HeaderComponent::with_sheet(sheet),
+            header,
         }
     }
 
@@ -226,7 +228,20 @@ impl App {
     pub async fn handle_routing(&mut self, nav: Nav) -> anyhow::Result<ComponentReturn<AppMsg>> {
         self.launch_bar_visible = false;
         self.launch_bar.clear();
-        self.header.set_selected_menu(nav);
+
+        let version = self.connectors.selected_version();
+        self.header.set_menus(Menu::available_for(version));
+
+        let menu: Menu = nav.into();
+        if !menu.is_available_for(version) {
+            return self.show_notification(Notification::error(format!(
+                "{} is not available for connector API version {}",
+                menu.name(),
+                version.map(|v| v.as_str()).unwrap_or("n/a")
+            )));
+        }
+
+        self.header.set_selected_menu(menu);
         self.change_sheet()?;
         match (self.header.selected_menu(), self.connectors.selected()) {
             (Menu::Connectors, _) => {

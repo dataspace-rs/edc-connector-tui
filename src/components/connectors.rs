@@ -1,6 +1,9 @@
 use ratatui::{layout::Rect, widgets::Row, Frame};
 
-use crate::types::{connector::Connector, info::InfoSheet, nav::Nav};
+use crate::{
+    config::ConnectorApiVersion,
+    types::{connector::Connector, info::InfoSheet, nav::Nav},
+};
 
 use self::msg::ConnectorsMsg;
 
@@ -94,6 +97,10 @@ impl ConnectorsComponent {
 
     pub fn selected(&self) -> Option<&Connector> {
         self.selected.as_ref()
+    }
+
+    pub fn selected_version(&self) -> Option<ConnectorApiVersion> {
+        self.selected.as_ref().map(|c| *c.config().version())
     }
 
     pub fn info_sheet(&self) -> InfoSheet {

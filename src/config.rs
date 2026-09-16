@@ -72,6 +72,11 @@ impl ConnectorApiVersion {
             ConnectorApiVersion::V5 => "v5",
         }
     }
+
+    /// The EDRs management API only exists in v3; it was removed in v4 and v5.
+    pub fn supports_edrs(&self) -> bool {
+        matches!(self, ConnectorApiVersion::V3)
+    }
 }
 
 #[derive(Deserialize, Debug, Clone, Default)]
