@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use edc_connector_client::types::query::{Query, SortOrder};
 use ratatui::{
-    layout::{Constraint, Flex, Layout, Rect},
+    layout::Rect,
     style::{Color, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear},
@@ -11,8 +11,9 @@ use ratatui::{
 
 use crate::{
     components::{Component, ComponentEvent, ComponentMsg, ComponentReturn},
-    widgets::form::{
-        msg::FormMsg, row::RowField, text::TextField, ChangeSet, FieldComponent, Form,
+    widgets::{
+        form::{msg::FormMsg, row::RowField, text::TextField, ChangeSet, FieldComponent, Form},
+        popup,
     },
 };
 
@@ -134,14 +135,6 @@ impl<M> Filter<M> {
             .to_builder()
             .offset(self.query.offset() - self.query.limit())
             .build();
-    }
-
-    fn popup_area(&self, area: Rect, percent_x: u16, percent_y: u16) -> Rect {
-        let vertical = Layout::vertical([Constraint::Percentage(percent_y)]).flex(Flex::Center);
-        let horizontal = Layout::horizontal([Constraint::Percentage(percent_x)]).flex(Flex::Center);
-        let [area] = vertical.areas(area);
-        let [area] = horizontal.areas(area);
-        area
     }
 
     fn parse_fields(fields: HashMap<String, FieldComponent>) -> anyhow::Result<Query> {
@@ -274,7 +267,7 @@ impl<M: Send + Sync + 'static> Component for Filter<M> {
         let block = Block::default()
             .title_top(Line::from(styled_text).centered())
             .borders(Borders::ALL);
-        let area = self.popup_area(area, 30, 50);
+        let area = popup::centered(area, 30, 50);
 
         let content = block.inner(area);
         f.render_widget(Clear, area); //this clears out the background
@@ -301,8 +294,8 @@ impl TryInto<Criteria> for FieldComponent {
 
     fn try_into(self) -> Result<Criteria, Self::Error> {
         match self {
-            FieldComponent::Text(_) => {
-                anyhow::bail!("Cannot extract a filter from text field")
+            FieldComponent::Text(_) | FieldComponent::Select(_) => {
+                anyhow::bail!("Cannot extract a filter from a single field")
             }
             FieldComponent::Row(row_field) => {
                 let fields = row_field.as_map();

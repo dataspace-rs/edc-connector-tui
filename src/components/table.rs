@@ -159,12 +159,34 @@ impl<T: TableEntry, M> UiTable<T, M> {
 
     pub fn update_elements(&mut self, elements: Vec<T>) {
         self.elements = elements;
-        if self.table_state.selected().is_none() {
-            self.table_state.select_first();
+        let len = self.elements.len();
+        match self.table_state.selected() {
+            _ if len == 0 => self.table_state.select(None),
+            Some(i) if i >= len => self.table_state.select(Some(len - 1)),
+            Some(_) => {}
+            None => self.table_state.select_first(),
         }
     }
 
+    /// Index of the highlighted row, if it points at an existing element.
+    pub fn selected_index(&self) -> Option<usize> {
+        self.table_state
+            .selected()
+            .filter(|i| *i < self.elements.len())
+    }
+
+    pub fn selected_element(&self) -> Option<&T> {
+        self.selected_index().and_then(|i| self.elements.get(i))
+    }
+
+    pub fn select(&mut self, idx: Option<usize>) {
+        self.table_state.select(idx);
+    }
+
     fn move_up(&mut self) {
+        if self.elements.is_empty() {
+            return;
+        }
         let new_pos = match self.table_state.selected() {
             Some(0) => self.elements.len() - 1,
             Some(i) => i - 1,
@@ -174,6 +196,9 @@ impl<T: TableEntry, M> UiTable<T, M> {
     }
 
     fn move_down(&mut self) {
+        if self.elements.is_empty() {
+            return;
+        }
         let new_pos = match self.table_state.selected() {
             Some(i) if i == self.elements.len() - 1 => 0,
             Some(i) => i + 1,
@@ -184,5 +209,54 @@ impl<T: TableEntry, M> UiTable<T, M> {
 
     pub fn elements(&self) -> &[T] {
         &self.elements
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Debug)]
+    struct Entry(&'static str);
+
+    impl TableEntry for Entry {
+        fn row(&self) -> Row<'_> {
+            Row::new(vec![self.0])
+        }
+
+        fn headers() -> Row<'static> {
+            Row::new(vec!["NAME"])
+        }
+    }
+
+    #[tokio::test]
+    async fn navigation_on_empty_table_does_not_panic() {
+        let mut table: UiTable<Entry, ()> = UiTable::new("t".to_string());
+        table.update_elements(vec![]);
+        assert_eq!(table.selected_index(), None);
+        table
+            .update(ComponentMsg(TableLocalMsg::MoveDown.into()))
+            .await
+            .unwrap();
+        table
+            .update(ComponentMsg(TableLocalMsg::MoveUp.into()))
+            .await
+            .unwrap();
+        assert!(table.selected_element().is_none());
+    }
+
+    #[tokio::test]
+    async fn update_elements_clamps_selection() {
+        let mut table: UiTable<Entry, ()> =
+            UiTable::with_elements("t".to_string(), vec![Entry("a"), Entry("b")], false);
+        table.select(Some(1));
+        table.update_elements(vec![Entry("a")]);
+        assert_eq!(table.selected_index(), Some(0));
+        assert_eq!(table.selected_element().unwrap().0, "a");
+
+        table.update_elements(vec![]);
+        assert_eq!(table.selected_index(), None);
+        table.update_elements(vec![Entry("x")]);
+        assert_eq!(table.selected_index(), Some(0));
     }
 }

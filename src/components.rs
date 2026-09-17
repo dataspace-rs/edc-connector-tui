@@ -143,7 +143,6 @@ impl Notification {
         }
     }
 
-    #[allow(dead_code)]
     pub fn info(msg: String) -> Notification {
         Notification {
             msg,

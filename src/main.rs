@@ -11,6 +11,7 @@ mod components;
 mod config;
 mod logging;
 mod runner;
+mod secrets;
 mod types;
 mod widgets;
 
@@ -26,8 +27,9 @@ async fn main() -> anyhow::Result<()> {
             init_app_single_connector(url, name, token).await
         }
         None => {
-            let config = Config::parse(&cli.config.map(Ok).unwrap_or_else(default_file)?)?;
-            App::init(config)
+            let path = cli.config.map(Ok).unwrap_or_else(default_file)?;
+            let config = Config::load_or_default(&path)?;
+            App::init(config, path)?
         }
     };
     let mut runner = Runner::new(Duration::from_millis(250), app);
@@ -58,7 +60,7 @@ async fn init_app_single_connector(
 
     let connector = Connector::new(cfg, client, ConnectorStatus::Connected);
 
-    App::init_with_connectors(vec![connector])
+    App::init_with_connectors(vec![connector], None)
 }
 
 mod tui {

@@ -21,7 +21,9 @@ pub struct RowField {
 impl RowField {
     pub fn set_selected(&mut self, selected: bool) {
         self.selected = selected;
-        self.fields[self.selected_idx].set_selected(selected);
+        if let Some(field) = self.fields.get_mut(self.selected_idx) {
+            field.set_selected(selected);
+        }
     }
 
     pub fn as_map(&self) -> HashMap<String, FieldComponent> {
@@ -127,7 +129,33 @@ impl RowField {
         }
     }
 
-    fn move_left(&mut self) {
+    pub fn is_first(&self) -> bool {
+        self.selected_idx == 0
+    }
+
+    pub fn is_last(&self) -> bool {
+        self.selected_idx + 1 >= self.fields.len()
+    }
+
+    pub fn select_first(&mut self) {
+        self.select_idx(0);
+    }
+
+    pub fn select_last(&mut self) {
+        self.select_idx(self.fields.len().saturating_sub(1));
+    }
+
+    fn select_idx(&mut self, idx: usize) {
+        if let Some(field) = self.fields.get_mut(self.selected_idx) {
+            field.set_selected(false);
+        }
+        self.selected_idx = idx;
+        if let Some(field) = self.fields.get_mut(self.selected_idx) {
+            field.set_selected(self.selected);
+        }
+    }
+
+    pub fn move_left(&mut self) {
         if self.selected_idx != 0 {
             self.fields[self.selected_idx].set_selected(false);
             self.selected_idx -= 1;
@@ -137,7 +165,10 @@ impl RowField {
         }
     }
 
-    fn move_right(&mut self) {
+    pub fn move_right(&mut self) {
+        if self.fields.is_empty() {
+            return;
+        }
         let len = self.fields.len() - 1;
         if self.selected_idx != len {
             self.fields[self.selected_idx].set_selected(false);

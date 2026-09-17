@@ -113,6 +113,19 @@ For configuration above the `token` could be set with `secret-tool` on Linux:
 secret-tool store --label="FirstConnector" service edc-connector-tui username connector_alias
 ```
 
+### Managing connectors from the TUI
+
+Connectors can also be added, edited and deleted from the `Connectors` view, so the config file
+does not have to be written by hand:
+
+- `a` opens the form to add a connector, `e` edits the highlighted one and `d` deletes it (after a `y/n` confirmation).
+- `tab` and `shift+tab` move through every field, `enter` moves to the next field (and submits on `Confirm`), `up`/`down` (or `ctrl-k`/`ctrl-j`) jump between rows, `left`/`right` move within a row and `esc` closes the form.
+- `API version` and `Auth type` are choice fields: `space` (or `l`) cycles to the next value and `backspace` (or `h`) to the previous one. Changing the auth type swaps the auth specific fields.
+- Every change is written back to the config file (`~/.config/edc-connector-tui/config.toml` or the `--config` file). The file is regenerated from the current connectors, so comments in it are not preserved. If the file does not exist yet the TUI starts with an empty list and creates it on the first save.
+- Secrets (API token, OAuth2 client secret, subject token) are optional fields next to their alias: a non-empty value is stored in the system keyring under the service `edc-connector-tui` with the alias as username (the same entry `secret-tool` creates above). Leave it blank to keep the secret already stored for that alias.
+
+When running with the `connector` subcommand there is no config file: changes are kept in memory only.
+
 > Altough `edc-connector-tui` builds for OSX and Windows are available, it has been only tested on Linux.
 > Contributions are welcome for multiplatform support/testing 
 

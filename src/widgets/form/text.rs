@@ -24,6 +24,9 @@ pub struct TextField {
     input: Input,
     #[builder(default)]
     selected: bool,
+    /// Render `*` instead of the typed characters (for secrets).
+    #[builder(default)]
+    masked: bool,
 }
 
 impl TextField {
@@ -41,6 +44,11 @@ impl TextField {
 
     pub fn set_selected(&mut self, selected: bool) {
         self.selected = selected;
+    }
+
+    #[cfg(test)]
+    pub fn is_selected(&self) -> bool {
+        self.selected
     }
 
     pub fn set_value(&mut self, input: &str) -> anyhow::Result<()> {
@@ -69,8 +77,16 @@ impl Component for TextField {
             .borders(Borders::all())
             .border_style(border_style)
             .title(self.label.clone());
+        let masked_input;
+        let input = if self.masked {
+            masked_input = Input::from("*".repeat(self.input.value().chars().count()))
+                .with_cursor(self.input.cursor());
+            &masked_input
+        } else {
+            &self.input
+        };
         f.render_widget(
-            TextInput::new(&self.input)
+            TextInput::new(input)
                 .block(block)
                 .show_cursor(self.selected),
             rect,
@@ -102,5 +118,46 @@ impl Component for TextField {
             }
             _ => Ok(vec![]),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::{backend::TestBackend, Terminal};
+
+    fn render(field: &mut TextField) -> String {
+        let mut terminal = Terminal::new(TestBackend::new(20, 3)).unwrap();
+        terminal.draw(|f| field.view(f, f.area())).unwrap();
+        let buffer = terminal.backend().buffer().clone();
+        (0..buffer.area.width)
+            .map(|x| buffer[(x, 1)].symbol().to_string())
+            .collect()
+    }
+
+    #[test]
+    fn masked_field_hides_its_value() {
+        let mut field = TextField::builder()
+            .name("secret".to_string())
+            .label("Secret".to_string())
+            .initial_value("abc".to_string())
+            .masked(true)
+            .build()
+            .unwrap();
+        let line = render(&mut field);
+        assert!(line.contains("***"), "{line:?}");
+        assert!(!line.contains("abc"), "{line:?}");
+        assert_eq!(field.value(), "abc");
+    }
+
+    #[test]
+    fn plain_field_shows_its_value() {
+        let mut field = TextField::builder()
+            .name("name".to_string())
+            .label("Name".to_string())
+            .initial_value("abc".to_string())
+            .build()
+            .unwrap();
+        assert!(render(&mut field).contains("abc"));
     }
 }

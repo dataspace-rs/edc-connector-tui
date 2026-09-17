@@ -1,4 +1,4 @@
-use super::{row::RowMsg, text::TextFieldMsg};
+use super::{row::RowMsg, select::SelectFieldMsg, text::TextFieldMsg};
 
 #[derive(Debug)]
 pub enum FormMsg<M> {
@@ -8,8 +8,14 @@ pub enum FormMsg<M> {
 
 #[derive(Debug)]
 pub enum FormLocalMsg {
+    /// Focus the row below (or the confirm button).
     MoveDown,
+    /// Focus the row above.
     MoveUp,
+    /// Focus the next field, walking through the fields of a row first.
+    Next,
+    /// Focus the previous field, walking through the fields of a row first.
+    Prev,
     Submit,
     FieldMsg(FieldMsg),
 }
@@ -18,4 +24,5 @@ pub enum FormLocalMsg {
 pub enum FieldMsg {
     Text(TextFieldMsg),
     Row(RowMsg),
+    Select(SelectFieldMsg),
 }
