@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en" id="oranda" class="hacker">
+  <head>
+    <title>edc-connector-tui</title>
+    
+    
+      <link rel="icon" href="/edc-connector-tui/favicon.ico" />
+    
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    
+      <meta name="description" content="A TUI client for EDC management APIs" />
+      <meta property="og:description" content="A TUI client for EDC management APIs" />
+    
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="edc-connector-tui" />
+    
+    
+    
+    <meta http-equiv="Permissions-Policy" content="interest-cohort=()" />
+    <link rel="stylesheet" href="/edc-connector-tui/oranda-v0.6.1.css" />
+    
+    
+  </head>
+  <body>
+    <div class="container">
+      <div class="page-body">
+        
+          <div class="repo_banner">
+            <a href="https://github.com/dataspace-rs/edc-connector-tui">
+              <div class="github-icon" aria-hidden="true"></div>
+              Check out our GitHub!
+            </a>
+          </div>
+        
+
+        <main>
+          <header>
+            
+            <h1 class="title">edc-connector-tui</h1>
+            
+  <nav class="nav">
+    <ul>
+      <li><a href="/edc-connector-tui/">Home</a></li>
+
+      
+
+      
+
+      
+
+      
+
+      
+        <li><a href="/edc-connector-tui/changelog/">Changelog</a></li>
+      
+    </ul>
+  </nav>
+
+          </header>
+
+          
+
+
+    <div class="oranda-hide">
+  <h1>EDC Connector TUI</h1>
+</div>
+<div>
+  <strong>
+    A TUI client for <a href="https://github.com/eclipse-edc/Connector" rel="noopener noreferrer">EDC</a>.
+  </strong>
+</div>
+<br>
+<div>
+  <a href="https://github.com/dataspace-rs/edc-connector-tui?query=workflow%3ATests" rel="noopener noreferrer">
+    <img src="https://github.com/dataspace-rs/edc-connector-tui/workflows/Tests/badge.svg" alt="Tests status">
+  </a>
+  <a href="https://crates.io/crates/edc-connector-client" rel="noopener noreferrer">
+    <img src="https://img.shields.io/crates/d/edc-connector-client.svg?style=flat-square" alt="Download">
+  </a>
+  <a href="https://docs.rs/edc-connector-client" rel="noopener noreferrer">
+    <img src="https://img.shields.io/badge/docs-latest-blue.svg?style=flat-square" alt="docs.rs docs">
+  </a>
+   <a href="https://opensource.org/licenses/Apache-2.0" rel="noopener noreferrer">
+    <img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="license">
+  </a>
+   <a href="https://deps.rs/repo/github/dataspace-rs/edc-connector-tui" rel="noopener noreferrer">
+    <img src="https://deps.rs/repo/github/dataspace-rs/edc-connector-tui/status.svg" alt="license">
+  </a>
+</div>
+<p><img src="media/demo.gif" alt="Demo Animation"></p>
+<h3>Install</h3>
+<p>Fetch a latest release <a href="https://github.com/dataspace-rs/edc-connector-tui/releases" rel="noopener noreferrer">here</a></p>
+<p>or install with cargo</p>
+<pre style="background-color:#263238;"><span style="color:#82aaff;">cargo install edc-connector-tui
+</span></pre>
+
+<h3>Run</h3>
+<p>The TUI client can either run with a single connector configured via cli args:</p>
+<pre style="background-color:#263238;"><span style="color:#82aaff;">edc-connector-tui connector</span><span style="color:#89ddff;"> --</span><span style="color:#f78c6c;">url</span><span style="color:#82aaff;"> http://localhost:29193/management</span><span style="color:#89ddff;"> --</span><span style="color:#f78c6c;">token</span><span style="color:#82aaff;"> 123456
+</span></pre>
+
+<p>or if no args provided it will try to read connectors configuration from the file at <code>~/.config/edc-connector-tui/config.toml</code></p>
+<p>The file should contain the list of configured connectors:</p>
+<pre style="background-color:#263238;"><span style="color:#89ddff;">[[connectors]]
+</span><span style="color:#f07178;">name</span><span style="color:#89ddff;">="</span><span style="color:#c3e88d;">FirstConnector</span><span style="color:#89ddff;">"
+</span><span style="color:#f07178;">address</span><span style="color:#89ddff;">="</span><span style="color:#c3e88d;">http://localhost:29193/management</span><span style="color:#89ddff;">"
+</span><span style="color:#f07178;">auth</span><span style="color:#89ddff;">= { </span><span style="color:#f07178;">type </span><span style="color:#89ddff;">= "</span><span style="color:#c3e88d;">token</span><span style="color:#89ddff;">", </span><span style="color:#f07178;">token_alias </span><span style="color:#89ddff;">= "</span><span style="color:#c3e88d;">connector_alias</span><span style="color:#89ddff;">" }
+</span><span style="color:#eeffff;">
+</span><span style="color:#89ddff;">[[connectors]]
+</span><span style="color:#f07178;">name</span><span style="color:#89ddff;">="</span><span style="color:#c3e88d;">SecondConnector</span><span style="color:#89ddff;">"
+</span><span style="color:#f07178;">address</span><span style="color:#89ddff;">="</span><span style="color:#c3e88d;">http://myconnector.xyz/management</span><span style="color:#89ddff;">"
+</span></pre>
+
+<p>The <code>token_alias</code> is used to fetch the actual token from the system keyring for the service <code>edc-connector-tui</code>.</p>
+<p>Supported <code>auth</code> types:</p>
+<ul>
+<li><code>{ type = "no-auth" }</code> (default when <code>auth</code> is omitted)</li>
+<li><code>{ type = "token", token_alias = "..." }</code> sends the token in the <code>X-Api-Key</code> header</li>
+<li><code>{ type = "bearer-token", token_alias = "..." }</code> sends the token as <code>Authorization: Bearer &lt;token&gt;</code></li>
+<li><code>{ type = "oauth2", client_id = "...", token_url = "...", secret_alias = "..." }</code> fetches a token via OAuth2 client credentials</li>
+<li><code>{ type = "token-exchange", token_exchange_url = "...", subject_token_file = "..." }</code> exchanges a workload credential for a JWT via OAuth2 Token Exchange (RFC 8693), sent as <code>Authorization: Bearer &lt;token&gt;</code></li>
+</ul>
+<p>For <code>token-exchange</code> the subject token comes from exactly one of <code>subject_token_file</code> (a path, re-read on every exchange so rotated credentials are picked up) or <code>subject_token_alias</code> (a keyring alias, like <code>token_alias</code>). Optional fields: <code>resource</code> (defaults to the connector's <code>participant_context_id</code>), <code>audience</code> (defaults to <code>edcv</code>) and <code>scopes</code> (defaults to <code>["management-api:read", "management-api:write"]</code>):</p>
+<pre style="background-color:#263238;"><span style="color:#89ddff;">[[connectors]]
+</span><span style="color:#f07178;">name</span><span style="color:#89ddff;">="</span><span style="color:#c3e88d;">Provider</span><span style="color:#89ddff;">"
+</span><span style="color:#f07178;">address</span><span style="color:#89ddff;">="</span><span style="color:#c3e88d;">http://localhost:29193/management</span><span style="color:#89ddff;">"
+</span><span style="color:#f07178;">api_version</span><span style="color:#89ddff;">="</span><span style="color:#c3e88d;">v5</span><span style="color:#89ddff;">"
+</span><span style="color:#f07178;">participant_context_id</span><span style="color:#89ddff;">="</span><span style="color:#c3e88d;">provider</span><span style="color:#89ddff;">"
+</span><span style="color:#eeffff;">
+</span><span style="color:#89ddff;">[connectors.auth]
+</span><span style="color:#f07178;">type</span><span style="color:#89ddff;">="</span><span style="color:#c3e88d;">token-exchange</span><span style="color:#89ddff;">"
+</span><span style="color:#f07178;">token_exchange_url</span><span style="color:#89ddff;">="</span><span style="color:#c3e88d;">http://jwtlet:8080/token</span><span style="color:#89ddff;">"
+</span><span style="color:#f07178;">subject_token_file</span><span style="color:#89ddff;">="</span><span style="color:#c3e88d;">/var/run/secrets/jwtlet/token</span><span style="color:#89ddff;">"
+</span><span style="color:#f07178;">scopes</span><span style="color:#89ddff;">=["</span><span style="color:#c3e88d;">management-api:read</span><span style="color:#89ddff;">", "</span><span style="color:#c3e88d;">management-api:write</span><span style="color:#89ddff;">"]
+</span></pre>
+
+<p>For configuration above the <code>token</code> could be set with <code>secret-tool</code> on Linux:</p>
+<pre style="background-color:#263238;"><span style="color:#82aaff;">secret-tool store</span><span style="color:#89ddff;"> --</span><span style="color:#f78c6c;">label</span><span style="color:#89ddff;">="</span><span style="color:#c3e88d;">FirstConnector</span><span style="color:#89ddff;">"</span><span style="color:#82aaff;"> service edc-connector-tui username connector_alias
+</span></pre>
+
+<h3>Managing connectors from the TUI</h3>
+<p>Connectors can also be added, edited and deleted from the <code>Connectors</code> view, so the config file
+does not have to be written by hand:</p>
+<ul>
+<li><code>a</code> opens the form to add a connector, <code>e</code> edits the highlighted one and <code>d</code> deletes it (after a <code>y/n</code> confirmation).</li>
+<li><code>tab</code> and <code>shift+tab</code> move through every field, <code>enter</code> moves to the next field (and submits on <code>Confirm</code>), <code>up</code>/<code>down</code> (or <code>ctrl-k</code>/<code>ctrl-j</code>) jump between rows, <code>left</code>/<code>right</code> move within a row and <code>esc</code> closes the form.</li>
+<li><code>API version</code> and <code>Auth type</code> are choice fields: <code>space</code> (or <code>l</code>) cycles to the next value and <code>backspace</code> (or <code>h</code>) to the previous one. Changing the auth type swaps the auth specific fields.</li>
+<li>Every change is written back to the config file (<code>~/.config/edc-connector-tui/config.toml</code> or the <code>--config</code> file). The file is regenerated from the current connectors, so comments in it are not preserved. If the file does not exist yet the TUI starts with an empty list and creates it on the first save.</li>
+<li>Secrets (API token, OAuth2 client secret, subject token) are optional fields next to their alias: a non-empty value is stored in the system keyring under the service <code>edc-connector-tui</code> with the alias as username (the same entry <code>secret-tool</code> creates above). Leave it blank to keep the secret already stored for that alias.</li>
+</ul>
+<p>When running with the <code>connector</code> subcommand there is no config file: changes are kept in memory only.</p>
+<h3>Admin workspace (v5)</h3>
+<p>Connectors speaking the v5 management API (<code>api_version = "v5"</code>) expose the global, participant
+independent resources of an EDC-V deployment. The TUI keeps them in a separate <em>Admin</em> workspace so
+they do not mix with the day-to-day views:</p>
+<ul>
+<li><code>ctrl+a</code> toggles between the <code>Operations</code> and the <code>Admin</code> workspace; the launch bar accepts
+<code>:admin</code> and <code>:ops</code> as well. <code>tab</code>/<code>shift+tab</code> only cycle through the entries of the active
+workspace, and each workspace remembers the last view you were in. Switching is refused for v3
+and v4 connectors.</li>
+<li>The admin views are <code>Participants</code>, <code>DataspaceProfiles</code>, <code>CelExpressions</code>, <code>CachedDocuments</code>,
+<code>DcpScopes</code> and <code>SchemaValidators</code>. The launch bar reaches them directly with <code>:participants</code>,
+<code>:profiles</code>, <code>:cel</code>, <code>:cache</code>, <code>:scopes</code> and <code>:schemas</code>.</li>
+<li>Every admin view supports <code>a</code> (add), <code>e</code> (edit) and <code>d</code> (delete, after a <code>y/n</code> confirmation)
+through the same forms as the connectors view, from the list and from the detail view
+(<code>enter</code>). Some views have extra actions: <code>t</code> tests a CEL expression against an operator,
+a right operand and <code>ctx</code> parameters; <code>u</code> makes the connector fetch a cached document again;
+<code>l</code> associates dataspace profiles with a participant and <code>c</code> edits its configuration. Open the
+participant detail with <code>enter</code> first so <code>l</code> and <code>c</code> are pre-filled with the current values.</li>
+<li>Form conventions: lists (scopes, actions, profiles, JSON-LD context URLs) are comma separated;
+structured values (trusted issuers, cached document content, properties, config entries) are
+typed as single-line JSON; a blank id lets the connector generate one; ids and profile names
+cannot be changed when editing.</li>
+<li>The admin APIs require a token with the <code>management-api:admin</code> scope, e.g. for token exchange:</li>
+</ul>
+<pre style="background-color:#263238;"><span style="color:#89ddff;">[connectors.auth]
+</span><span style="color:#f07178;">type</span><span style="color:#89ddff;">="</span><span style="color:#c3e88d;">token-exchange</span><span style="color:#89ddff;">"
+</span><span style="color:#f07178;">token_exchange_url</span><span style="color:#89ddff;">="</span><span style="color:#c3e88d;">http://jwtlet:8080/token</span><span style="color:#89ddff;">"
+</span><span style="color:#f07178;">subject_token_file</span><span style="color:#89ddff;">="</span><span style="color:#c3e88d;">/var/run/secrets/jwtlet/token</span><span style="color:#89ddff;">"
+</span><span style="color:#f07178;">scopes</span><span style="color:#89ddff;">=["</span><span style="color:#c3e88d;">management-api:admin</span><span style="color:#89ddff;">"]
+</span></pre>
+
+<blockquote>
+<p>Altough <code>edc-connector-tui</code> builds for OSX and Windows are available, it has been only tested on Linux.
+Contributions are welcome for multiplatform support/testing</p>
+</blockquote>
+
+
+
+        </main>
+      </div>
+
+      <footer>
+        
+          <a href="https://github.com/dataspace-rs/edc-connector-tui"><div class="github-icon" aria-hidden="true"></div></a>
+        
+        <span>
+          edc-connector-tui, Apache-2.0
+        </span>
+      </footer>
+    </div>
+
+    
+    
+
+    
+
+
+  </body>
+</html>
