@@ -24,7 +24,7 @@ pub struct ResourceComponent<T> {
     resource: Option<T>,
     name: String,
     selected_field: usize,
-    clip: Clipboard,
+    clip: Option<Clipboard>,
     scroll_view_state: ScrollViewState,
 }
 
@@ -43,7 +43,7 @@ impl<T> Default for ResourceComponent<T> {
             resource: Default::default(),
             name: String::default(),
             selected_field: 0,
-            clip: Clipboard::new().unwrap(),
+            clip: Clipboard::new().ok(),
             scroll_view_state: ScrollViewState::default(),
         }
     }
@@ -64,13 +64,18 @@ impl<T: DrawableResource> ResourceComponent<T> {
             name,
             resource: None,
             selected_field: 0,
-            clip: Clipboard::new().unwrap(),
+            clip: Clipboard::new().ok(),
             scroll_view_state: ScrollViewState::default(),
         }
     }
 
     pub fn update_resource(&mut self, resource: Option<T>) {
         self.resource = resource;
+    }
+
+    /// The resource currently shown, if any.
+    pub fn resource(&self) -> Option<&T> {
+        self.resource.as_ref()
     }
     fn fields_height(&self) -> u16 {
         if let Some(res) = self.resource.as_ref() {
@@ -137,12 +142,15 @@ impl<T: DrawableResource> ResourceComponent<T> {
     fn yank(&mut self) -> anyhow::Result<ComponentReturn<ResourceMsg>> {
         if let Some(res) = self.resource.as_ref() {
             if let Some(field) = res.fields().get(self.selected_field) {
-                self.clip
-                    .set_text(field.value.as_ref().to_string())
-                    .unwrap();
-
-                let notification =
-                    Notification::info(format!("Value of '{}' field copied!", field.name));
+                let notification = match self.clip.as_mut() {
+                    Some(clip) => match clip.set_text(field.value.as_ref().to_string()) {
+                        Ok(()) => {
+                            Notification::info(format!("Value of '{}' field copied!", field.name))
+                        }
+                        Err(err) => Notification::error(format!("Copy failed: {}", err)),
+                    },
+                    None => Notification::error("Clipboard not available".to_string()),
+                };
                 return Ok(ComponentReturn::action(Action::Notification(notification)));
             }
         }

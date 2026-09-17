@@ -4,8 +4,9 @@ use crossterm::event::{Event, KeyEvent};
 use futures::{future::BoxFuture, FutureExt};
 use ratatui::{layout::Rect, Frame};
 
-use crate::types::nav::Nav;
+use crate::types::nav::{Nav, Workspace};
 
+pub mod admin;
 pub mod agreements;
 pub mod assets;
 pub mod connectors;
@@ -117,6 +118,7 @@ pub enum Action {
     Quit,
     Esc,
     NavTo(Nav),
+    SwitchWorkspace(Workspace),
     ChangeSheet,
     Notification(Notification),
 }

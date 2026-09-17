@@ -1,19 +1,18 @@
 use std::collections::HashMap;
 
-use ratatui::{
-    layout::Rect,
-    style::{Color, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, Clear},
-    Frame,
-};
+use ratatui::{layout::Rect, Frame};
 
 use crate::{
     components::{Component, ComponentEvent, ComponentMsg, ComponentReturn},
     config::{AuthKind, ConnectorApiVersion, ConnectorConfig},
     widgets::{
         form::{
-            msg::FormMsg, row::RowField, select::SelectField, text::TextField, FieldComponent, Form,
+            msg::FormMsg,
+            row::RowField,
+            select::SelectField,
+            text::TextField,
+            values::{flatten, list, optional, required, required_url, value},
+            FieldComponent, Form,
         },
         popup,
     },
@@ -131,15 +130,6 @@ impl ConnectorForm {
         &self.form
     }
 
-    fn text(name: &str, label: &str, value: &str) -> TextField {
-        TextField::builder()
-            .name(name.to_string())
-            .label(label.to_string())
-            .initial_value(value.to_string())
-            .build()
-            .expect("text field")
-    }
-
     fn secret(name: &str, label: &str) -> TextField {
         TextField::builder()
             .name(name.to_string())
@@ -152,12 +142,12 @@ impl ConnectorForm {
     fn base_fields(cfg: Option<&ConnectorConfig>) -> Vec<FieldComponent> {
         let mut base = RowField::default()
             .name("base")
-            .field(Self::text(
+            .field(TextField::plain(
                 "name",
                 "Name",
                 cfg.map(|c| c.name()).unwrap_or_default(),
             ))
-            .field(Self::text(
+            .field(TextField::plain(
                 "address",
                 "Address (management URL)",
                 cfg.map(|c| c.address()).unwrap_or_default(),
@@ -174,7 +164,7 @@ impl ConnectorForm {
                 )
                 .with_value(cfg.map(|c| c.version().as_str()).unwrap_or("v3")),
             )
-            .field(Self::text(
+            .field(TextField::plain(
                 "participant_context_id",
                 "Participant context id",
                 cfg.and_then(|c| c.participant_context_id())
@@ -211,7 +201,11 @@ impl ConnectorForm {
                 };
                 vec![RowField::default()
                     .name("token")
-                    .field(Self::text("token_alias", "Token alias (keyring)", alias))
+                    .field(TextField::plain(
+                        "token_alias",
+                        "Token alias (keyring)",
+                        alias,
+                    ))
                     .field(Self::secret("secret", "Token (blank = keep stored)"))
                     .into()]
             }
@@ -231,12 +225,12 @@ impl ConnectorForm {
                 vec![
                     RowField::default()
                         .name("oauth_1")
-                        .field(Self::text("client_id", "Client id", client_id))
-                        .field(Self::text("token_url", "Token URL", token_url))
+                        .field(TextField::plain("client_id", "Client id", client_id))
+                        .field(TextField::plain("token_url", "Token URL", token_url))
                         .into(),
                     RowField::default()
                         .name("oauth_2")
-                        .field(Self::text(
+                        .field(TextField::plain(
                             "secret_alias",
                             "Secret alias (keyring)",
                             secret_alias,
@@ -273,13 +267,17 @@ impl ConnectorForm {
                 vec![
                     RowField::default()
                         .name("exchange_1")
-                        .field(Self::text("token_exchange_url", "Token exchange URL", &url))
-                        .field(Self::text(
+                        .field(TextField::plain(
+                            "token_exchange_url",
+                            "Token exchange URL",
+                            &url,
+                        ))
+                        .field(TextField::plain(
                             "subject_token_file",
                             "Subject token file",
                             &file,
                         ))
-                        .field(Self::text(
+                        .field(TextField::plain(
                             "subject_token_alias",
                             "Subject token alias (keyring)",
                             &alias,
@@ -291,9 +289,13 @@ impl ConnectorForm {
                             "subject_token",
                             "Subject token (blank = keep stored)",
                         ))
-                        .field(Self::text("resource", "Resource", &resource))
-                        .field(Self::text("audience", "Audience", &audience))
-                        .field(Self::text("scopes", "Scopes (comma separated)", &scopes))
+                        .field(TextField::plain("resource", "Resource", &resource))
+                        .field(TextField::plain("audience", "Audience", &audience))
+                        .field(TextField::plain(
+                            "scopes",
+                            "Scopes (comma separated)",
+                            &scopes,
+                        ))
                         .into(),
                 ]
             }
@@ -314,50 +316,6 @@ impl ConnectorForm {
             }
         }
     }
-}
-
-fn flatten(fields: HashMap<String, FieldComponent>) -> HashMap<String, String> {
-    let mut values = HashMap::new();
-    for (name, field) in fields {
-        match field {
-            FieldComponent::Row(row) => values.extend(flatten(row.as_map())),
-            other => {
-                if let Ok(value) = other.try_into() {
-                    values.insert(name, value);
-                }
-            }
-        }
-    }
-    values
-}
-
-fn value(values: &HashMap<String, String>, name: &str) -> String {
-    values
-        .get(name)
-        .map(|v| v.trim().to_string())
-        .unwrap_or_default()
-}
-
-fn optional(values: &HashMap<String, String>, name: &str) -> Option<String> {
-    Some(value(values, name)).filter(|v| !v.is_empty())
-}
-
-fn required(values: &HashMap<String, String>, name: &str, label: &str) -> anyhow::Result<String> {
-    optional(values, name).ok_or_else(|| anyhow::anyhow!("{} is required", label))
-}
-
-fn required_url(
-    values: &HashMap<String, String>,
-    name: &str,
-    label: &str,
-) -> anyhow::Result<String> {
-    let raw = required(values, name, label)?;
-    let parsed = url::Url::parse(&raw)
-        .map_err(|e| anyhow::anyhow!("{} is not a valid URL: {}", label, e))?;
-    if !matches!(parsed.scheme(), "http" | "https") {
-        anyhow::bail!("{} must be an http(s) URL", label);
-    }
-    Ok(raw)
 }
 
 /// Validates the (flattened) form values and builds the connector configuration.
@@ -422,12 +380,7 @@ pub(crate) fn parse_values(
                     ),
                 }
             }
-            let scopes = value(values, "scopes")
-                .split(',')
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-                .map(String::from)
-                .collect::<Vec<_>>();
+            let scopes = list(values, "scopes");
             AuthKind::TokenExchange {
                 token_exchange_url,
                 subject_token_file: subject_token_file.map(Into::into),
@@ -461,13 +414,7 @@ impl Component for ConnectorForm {
 
     fn view(&mut self, f: &mut Frame, _rect: Rect) {
         let area = popup::centered(f.area(), 80, 70);
-        let styled_text = Span::styled(self.title(), Style::default().fg(Color::Red));
-        let block = Block::default()
-            .title_top(Line::from(styled_text).centered())
-            .borders(Borders::ALL);
-        let content = block.inner(area);
-        f.render_widget(Clear, area);
-        f.render_widget(block, area);
+        let content = popup::framed(f, area, &self.title());
         self.form.view(f, content);
     }
 

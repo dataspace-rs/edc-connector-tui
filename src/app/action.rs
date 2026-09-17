@@ -1,4 +1,4 @@
-use crate::components::{Action, ActionHandler, ComponentMsg};
+use crate::components::{header::msg::HeaderMsg, Action, ActionHandler, ComponentMsg};
 
 use super::{model::AppFocus, msg::AppMsg, App};
 
@@ -11,6 +11,10 @@ impl ActionHandler for App {
         match (&self.focus, action) {
             (AppFocus::LaunchBar, Action::Esc) => Ok(vec![AppMsg::HideLaunchBar.into()]),
             (_, Action::NavTo(nav)) => Ok(vec![AppMsg::RoutingMsg(nav).into()]),
+            (_, Action::SwitchWorkspace(ws)) => Ok(vec![AppMsg::HeaderMsg(
+                HeaderMsg::SwitchWorkspace(Some(ws)),
+            )
+            .into()]),
             (_, Action::ChangeSheet) => Ok(vec![AppMsg::ChangeSheet.into()]),
             (_, Action::Notification(noty)) => Ok(vec![AppMsg::NontificationMsg(
                 crate::components::NotificationMsg::Show(noty),

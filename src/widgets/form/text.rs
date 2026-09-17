@@ -34,6 +34,16 @@ impl TextField {
         TextFieldBuilder::default()
     }
 
+    /// An unmasked field called `name`, titled `label` and pre-filled with `value`.
+    pub fn plain(name: &str, label: &str, value: &str) -> TextField {
+        Self::builder()
+            .name(name.to_string())
+            .label(label.to_string())
+            .initial_value(value.to_string())
+            .build()
+            .expect("text field")
+    }
+
     pub fn name(&self) -> &str {
         &self.name
     }

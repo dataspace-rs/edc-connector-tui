@@ -121,22 +121,6 @@ impl<M> Filter<M> {
         self
     }
 
-    pub fn next_page(&mut self) {
-        self.query = self
-            .query
-            .to_builder()
-            .offset(self.query.offset() + self.query.limit())
-            .build();
-    }
-
-    pub fn prev_page(&mut self) {
-        self.query = self
-            .query
-            .to_builder()
-            .offset(self.query.offset() - self.query.limit())
-            .build();
-    }
-
     fn parse_fields(fields: HashMap<String, FieldComponent>) -> anyhow::Result<Query> {
         let limit: String = fields["limit"].clone().try_into()?;
         let sort_field: String = fields["sort_field"].clone().try_into()?;

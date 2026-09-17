@@ -1,5 +1,6 @@
 use std::{path::PathBuf, rc::Rc, time::Duration};
 mod action;
+mod admin;
 mod fetch;
 pub mod model;
 mod msg;
@@ -13,11 +14,27 @@ use ratatui::{
 
 use crate::{
     components::{
-        agreements::ContractAgreementsComponent, assets::AssetsComponent,
-        connectors::ConnectorsComponent, contract_definitions::ContractDefinitionsComponent,
-        contract_negotiations::ContractNegotiationsComponent, dataplanes::DataPlanesComponent,
-        edrs::EdrsComponent, footer::Footer, header::HeaderComponent, launch_bar::LaunchBar,
-        policies::PolicyDefinitionsComponent, transfer_processes::TransferProcessesComponent,
+        admin::{
+            cached_documents::{self, CachedDocumentsComponent},
+            cel_expressions::{self, CelExpressionsComponent},
+            dataspace_profiles::{self, DataspaceProfilesComponent},
+            dcp_scopes::{self, DcpScopesComponent},
+            participants::{self, ParticipantsComponent},
+            schema_validators::{self, SchemaValidatorsComponent},
+        },
+        agreements::ContractAgreementsComponent,
+        assets::AssetsComponent,
+        connectors::ConnectorsComponent,
+        contract_definitions::ContractDefinitionsComponent,
+        contract_negotiations::ContractNegotiationsComponent,
+        dataplanes::DataPlanesComponent,
+        edrs::EdrsComponent,
+        footer::Footer,
+        header::HeaderComponent,
+        launch_bar::LaunchBar,
+        policies::PolicyDefinitionsComponent,
+        resources::{ListMode, ResourceAction},
+        transfer_processes::TransferProcessesComponent,
         Component, ComponentEvent, ComponentMsg, ComponentReturn, Notification, NotificationMsg,
     },
     config::Config,
@@ -40,6 +57,12 @@ pub struct App {
     transfer_processes: TransferProcessesComponent,
     edrs: EdrsComponent,
     dataplanes: DataPlanesComponent,
+    participants: ParticipantsComponent,
+    dataspace_profiles: DataspaceProfilesComponent,
+    cel_expressions: CelExpressionsComponent,
+    cached_documents: CachedDocumentsComponent,
+    dcp_scopes: DcpScopesComponent,
+    schema_validators: SchemaValidatorsComponent,
     launch_bar: LaunchBar,
     launch_bar_visible: bool,
     focus: AppFocus,
@@ -53,7 +76,7 @@ impl App {
 
         let sheet = connectors.info_sheet().merge(Self::info_sheet());
         let mut header = HeaderComponent::with_sheet(sheet);
-        header.set_menus(Menu::available_for(connectors.selected_version()));
+        header.set_version(connectors.selected_version());
 
         App {
             connectors,
@@ -81,6 +104,80 @@ impl App {
             dataplanes: DataPlanesComponent::default()
                 .on_fetch(Self::fetch_dataplanes)
                 .on_single_fetch(Self::identity),
+            participants: ParticipantsComponent::default()
+                .on_fetch(Self::fetch_participants)
+                .on_single_fetch(Self::participant_detail)
+                .list_mode(ListMode::Paged)
+                .editable(participants::form)
+                .on_create(Self::create_participant)
+                .on_update(Self::update_participant)
+                .on_delete(|e| e.inner().id().to_string(), Self::delete_participant)
+                .action(ResourceAction::with_form(
+                    'l',
+                    "Associate profiles",
+                    participants::profiles_form,
+                    Self::associate_participant_profiles,
+                ))
+                .action(ResourceAction::with_form(
+                    'c',
+                    "Edit config",
+                    participants::config_form,
+                    Self::save_participant_config,
+                )),
+            dataspace_profiles: DataspaceProfilesComponent::default()
+                .on_fetch(Self::fetch_dataspace_profiles)
+                .on_single_fetch(Self::identity)
+                .editable(dataspace_profiles::form)
+                .on_create(Self::create_dataspace_profile)
+                .on_update(Self::update_dataspace_profile)
+                .on_delete(
+                    |e| e.inner().name().to_string(),
+                    Self::delete_dataspace_profile,
+                ),
+            cel_expressions: CelExpressionsComponent::default()
+                .on_fetch(Self::fetch_cel_expressions)
+                .on_single_fetch(Self::identity)
+                .editable(cel_expressions::form)
+                .on_create(Self::create_cel_expression)
+                .on_update(Self::update_cel_expression)
+                .on_delete(|e| e.inner().id().to_string(), Self::delete_cel_expression)
+                .action(ResourceAction::with_form(
+                    't',
+                    "Test expression",
+                    cel_expressions::test_form,
+                    Self::test_cel_expression,
+                )),
+            cached_documents: CachedDocumentsComponent::default()
+                .on_fetch(Self::fetch_cached_documents)
+                .on_single_fetch(Self::identity)
+                .list_mode(ListMode::Plain)
+                .editable(cached_documents::form)
+                .on_create(Self::create_cached_document)
+                .on_update(Self::update_cached_document)
+                .on_delete(|e| e.inner().id().to_string(), Self::delete_cached_document)
+                .action(ResourceAction::immediate(
+                    'u',
+                    "Refresh document",
+                    Self::refresh_cached_document,
+                )),
+            dcp_scopes: DcpScopesComponent::default()
+                .on_fetch(Self::fetch_dcp_scopes)
+                .on_single_fetch(Self::identity)
+                .editable(dcp_scopes::form)
+                .on_create(Self::create_dcp_scope)
+                .on_update(Self::update_dcp_scope)
+                .on_delete(|e| e.inner().id().to_string(), Self::delete_dcp_scope),
+            schema_validators: SchemaValidatorsComponent::default()
+                .on_fetch(Self::fetch_schema_validators)
+                .on_single_fetch(Self::identity)
+                .list_mode(ListMode::Plain)
+                .editable(schema_validators::form)
+                .on_create(Self::create_schema_validator)
+                .on_update(Self::update_schema_validator)
+                .on_delete(
+                    |e| e.inner().id().to_string(),
+                    Self::delete_schema_validator,
+                ),
             launch_bar: LaunchBar::default(),
             launch_bar_visible: false,
             focus: AppFocus::ConnectorList,
@@ -103,6 +200,7 @@ impl App {
         InfoSheet::default()
             .key_binding("<tab>", "Next menu")
             .key_binding("<tab+shift>", "Prev menu")
+            .key_binding("<ctrl+a>", "Admin/Ops")
             .key_binding("<esc>", "Back/Clear")
             .key_binding("<:>", "Launch bar")
             .key_binding("<:q>", "Quit")
@@ -131,8 +229,7 @@ impl App {
     }
 
     pub fn change_sheet(&mut self) -> anyhow::Result<ComponentReturn<AppMsg>> {
-        self.header
-            .set_menus(Menu::available_for(self.connectors.selected_version()));
+        self.header.set_version(self.connectors.selected_version());
         let component_sheet = match self.header.selected_menu() {
             Menu::Connectors => self.connectors.key_bindings(),
             Menu::Assets => self.assets.info_sheet(),
@@ -143,6 +240,12 @@ impl App {
             Menu::TransferProcesses => self.transfer_processes.info_sheet(),
             Menu::Edrs => self.edrs.info_sheet(),
             Menu::DataPlanes => self.dataplanes.info_sheet(),
+            Menu::Participants => self.participants.info_sheet(),
+            Menu::DataspaceProfiles => self.dataspace_profiles.info_sheet(),
+            Menu::CelExpressions => self.cel_expressions.info_sheet(),
+            Menu::CachedDocuments => self.cached_documents.info_sheet(),
+            Menu::DcpScopes => self.dcp_scopes.info_sheet(),
+            Menu::SchemaValidators => self.schema_validators.info_sheet(),
         };
 
         self.header.update_sheet(
@@ -159,7 +262,7 @@ impl App {
         self.launch_bar.clear();
 
         let version = self.connectors.selected_version();
-        self.header.set_menus(Menu::available_for(version));
+        self.header.set_version(version);
 
         let menu: Menu = nav.into();
         if !menu.is_available_for(version) {
@@ -230,6 +333,55 @@ impl App {
                 Self::forward_init(&mut self.dataplanes, connector.clone(), AppMsg::DataPlanes)
                     .await
             }
+            (Menu::Participants, Some(connector)) => {
+                self.focus = AppFocus::Participants;
+                Self::forward_init(
+                    &mut self.participants,
+                    connector.clone(),
+                    AppMsg::Participants,
+                )
+                .await
+            }
+            (Menu::DataspaceProfiles, Some(connector)) => {
+                self.focus = AppFocus::DataspaceProfiles;
+                Self::forward_init(
+                    &mut self.dataspace_profiles,
+                    connector.clone(),
+                    AppMsg::DataspaceProfiles,
+                )
+                .await
+            }
+            (Menu::CelExpressions, Some(connector)) => {
+                self.focus = AppFocus::CelExpressions;
+                Self::forward_init(
+                    &mut self.cel_expressions,
+                    connector.clone(),
+                    AppMsg::CelExpressions,
+                )
+                .await
+            }
+            (Menu::CachedDocuments, Some(connector)) => {
+                self.focus = AppFocus::CachedDocuments;
+                Self::forward_init(
+                    &mut self.cached_documents,
+                    connector.clone(),
+                    AppMsg::CachedDocuments,
+                )
+                .await
+            }
+            (Menu::DcpScopes, Some(connector)) => {
+                self.focus = AppFocus::DcpScopes;
+                Self::forward_init(&mut self.dcp_scopes, connector.clone(), AppMsg::DcpScopes).await
+            }
+            (Menu::SchemaValidators, Some(connector)) => {
+                self.focus = AppFocus::SchemaValidators;
+                Self::forward_init(
+                    &mut self.schema_validators,
+                    connector.clone(),
+                    AppMsg::SchemaValidators,
+                )
+                .await
+            }
             (_, None) => Ok(ComponentReturn::empty()),
         }
     }
@@ -256,6 +408,12 @@ impl Component for App {
             Menu::TransferProcesses => self.transfer_processes.view(f, main[2]),
             Menu::Edrs => self.edrs.view(f, main[2]),
             Menu::DataPlanes => self.dataplanes.view(f, main[2]),
+            Menu::Participants => self.participants.view(f, main[2]),
+            Menu::DataspaceProfiles => self.dataspace_profiles.view(f, main[2]),
+            Menu::CelExpressions => self.cel_expressions.view(f, main[2]),
+            Menu::CachedDocuments => self.cached_documents.view(f, main[2]),
+            Menu::DcpScopes => self.dcp_scopes.view(f, main[2]),
+            Menu::SchemaValidators => self.schema_validators.view(f, main[2]),
         }
 
         self.footer.view(f, main[3]);
@@ -330,6 +488,40 @@ impl Component for App {
             AppMsg::DataPlanes(m) => {
                 Self::forward_update(&mut self.dataplanes, m.into(), AppMsg::DataPlanes).await
             }
+            AppMsg::Participants(m) => {
+                Self::forward_update(&mut self.participants, m.into(), AppMsg::Participants).await
+            }
+            AppMsg::DataspaceProfiles(m) => {
+                Self::forward_update(
+                    &mut self.dataspace_profiles,
+                    m.into(),
+                    AppMsg::DataspaceProfiles,
+                )
+                .await
+            }
+            AppMsg::CelExpressions(m) => {
+                Self::forward_update(&mut self.cel_expressions, m.into(), AppMsg::CelExpressions)
+                    .await
+            }
+            AppMsg::CachedDocuments(m) => {
+                Self::forward_update(
+                    &mut self.cached_documents,
+                    m.into(),
+                    AppMsg::CachedDocuments,
+                )
+                .await
+            }
+            AppMsg::DcpScopes(m) => {
+                Self::forward_update(&mut self.dcp_scopes, m.into(), AppMsg::DcpScopes).await
+            }
+            AppMsg::SchemaValidators(m) => {
+                Self::forward_update(
+                    &mut self.schema_validators,
+                    m.into(),
+                    AppMsg::SchemaValidators,
+                )
+                .await
+            }
             AppMsg::HeaderMsg(m) => {
                 Self::forward_update(&mut self.header, m.into(), AppMsg::HeaderMsg).await
             }
@@ -381,6 +573,32 @@ impl Component for App {
             AppFocus::DataPlanes => {
                 Self::forward_event(&mut self.dataplanes, evt.clone(), AppMsg::DataPlanes)?
             }
+            AppFocus::Participants => {
+                Self::forward_event(&mut self.participants, evt.clone(), AppMsg::Participants)?
+            }
+            AppFocus::DataspaceProfiles => Self::forward_event(
+                &mut self.dataspace_profiles,
+                evt.clone(),
+                AppMsg::DataspaceProfiles,
+            )?,
+            AppFocus::CelExpressions => Self::forward_event(
+                &mut self.cel_expressions,
+                evt.clone(),
+                AppMsg::CelExpressions,
+            )?,
+            AppFocus::CachedDocuments => Self::forward_event(
+                &mut self.cached_documents,
+                evt.clone(),
+                AppMsg::CachedDocuments,
+            )?,
+            AppFocus::DcpScopes => {
+                Self::forward_event(&mut self.dcp_scopes, evt.clone(), AppMsg::DcpScopes)?
+            }
+            AppFocus::SchemaValidators => Self::forward_event(
+                &mut self.schema_validators,
+                evt.clone(),
+                AppMsg::SchemaValidators,
+            )?,
         };
 
         if !msg.is_empty() {

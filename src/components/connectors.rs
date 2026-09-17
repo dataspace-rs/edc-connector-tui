@@ -3,9 +3,7 @@ use std::path::PathBuf;
 use crossterm::event::{Event, KeyCode, KeyEventKind};
 use ratatui::{
     layout::Rect,
-    style::{Color, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph, Row},
+    widgets::{Paragraph, Row},
     Frame,
 };
 
@@ -13,7 +11,7 @@ use crate::{
     config::{Config, ConnectorApiVersion, ConnectorConfig},
     secrets,
     types::{connector::Connector, info::InfoSheet, nav::Nav},
-    widgets::popup,
+    widgets::{form::Form, popup},
 };
 
 use self::{
@@ -95,13 +93,7 @@ impl Component for ConnectorsComponent {
             Mode::Form(form) => form.view(f, rect),
             Mode::ConfirmDelete { name, .. } => {
                 let area = popup::centered_fixed(f.area(), 60, 5);
-                let title = Span::styled(" Delete connector ", Style::default().fg(Color::Red));
-                let block = Block::default()
-                    .title_top(Line::from(title).centered())
-                    .borders(Borders::ALL);
-                let content = block.inner(area);
-                f.render_widget(Clear, area);
-                f.render_widget(block, area);
+                let content = popup::framed(f, area, " Delete connector ");
                 f.render_widget(
                     Paragraph::new(format!("Delete connector '{}'? (y/n)", name)).centered(),
                     content,
@@ -184,14 +176,22 @@ impl Component for ConnectorsComponent {
     ) -> anyhow::Result<Vec<ComponentMsg<Self::Msg>>> {
         let key = match &evt {
             ComponentEvent::Event(Event::Key(key)) if key.kind != KeyEventKind::Release => {
-                Some(key.code)
+                Some(*key)
             }
             _ => None,
         };
+        let plain = key.filter(|k| k.modifiers.is_empty()).map(|k| k.code);
+        let key = key.map(|k| k.code);
         match (&mut self.mode, key) {
-            (Mode::List, Some(KeyCode::Char('a'))) => Ok(vec![ConnectorsMsg::ShowAdd.into()]),
-            (Mode::List, Some(KeyCode::Char('e'))) => Ok(vec![ConnectorsMsg::ShowEdit.into()]),
-            (Mode::List, Some(KeyCode::Char('d'))) => Ok(vec![ConnectorsMsg::ShowDelete.into()]),
+            (Mode::List, _) if plain == Some(KeyCode::Char('a')) => {
+                Ok(vec![ConnectorsMsg::ShowAdd.into()])
+            }
+            (Mode::List, _) if plain == Some(KeyCode::Char('e')) => {
+                Ok(vec![ConnectorsMsg::ShowEdit.into()])
+            }
+            (Mode::List, _) if plain == Some(KeyCode::Char('d')) => {
+                Ok(vec![ConnectorsMsg::ShowDelete.into()])
+            }
             (Mode::List, _) => Self::forward_event(&mut self.table, evt, |msg| match msg {
                 TableMsg::Local(table) => ConnectorsMsg::TableEvent(TableMsg::Local(table)),
                 TableMsg::Outer(outer) => *outer,
@@ -265,14 +265,7 @@ impl ConnectorsComponent {
                 .key_binding("<a>", "Add connector")
                 .key_binding("<e>", "Edit connector")
                 .key_binding("<d>", "Delete connector"),
-            Mode::Form(_) => InfoSheet::default()
-                .key_binding("<esc>", "Cancel")
-                .key_binding("<tab>", "Next field")
-                .key_binding("<shift+tab>", "Prev field")
-                .key_binding("<up/down>", "Prev/Next row")
-                .key_binding("<left/right>", "Move in row")
-                .key_binding("<space>", "Cycle value")
-                .key_binding("<enter>", "Next/Confirm"),
+            Mode::Form(_) => Form::<ConnectorFormOutput>::key_bindings(),
             Mode::ConfirmDelete { .. } => InfoSheet::default()
                 .key_binding("<y>", "Confirm delete")
                 .key_binding("<n/esc>", "Cancel"),
@@ -436,6 +429,21 @@ mod tests {
 
     fn names(c: &ConnectorsComponent) -> Vec<String> {
         c.names()
+    }
+
+    #[test]
+    fn ctrl_a_does_not_open_the_add_form() {
+        let mut c = ConnectorsComponent::new(vec![connector("a")], None);
+        let ctrl_a = ComponentEvent::Event(Event::Key(KeyEvent::new(
+            KeyCode::Char('a'),
+            crossterm::event::KeyModifiers::CONTROL,
+        )));
+        assert!(c.handle_event(ctrl_a).unwrap().is_empty());
+        assert!(matches!(c.mode, Mode::List));
+        assert!(matches!(
+            msgs(&mut c, KeyCode::Char('a')).as_slice(),
+            [ConnectorsMsg::ShowAdd]
+        ));
     }
 
     fn notification_text(actions: &[Action]) -> String {

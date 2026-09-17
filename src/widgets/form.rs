@@ -11,12 +11,16 @@ use row::RowField;
 use select::SelectField;
 use text::TextField;
 
-use crate::components::{Component, ComponentEvent, ComponentMsg, ComponentReturn};
+use crate::{
+    components::{Component, ComponentEvent, ComponentMsg, ComponentReturn},
+    types::info::InfoSheet,
+};
 pub mod button;
 pub mod msg;
 pub mod row;
 pub mod select;
 pub mod text;
+pub mod values;
 
 pub type OnConfirm<M> =
     Box<dyn Fn(HashMap<String, FieldComponent>) -> anyhow::Result<M> + Send + Sync>;
@@ -45,6 +49,18 @@ impl<M> Default for Form<M> {
 }
 
 impl<M> Form<M> {
+    /// The key bindings of every form, for the header help sheet.
+    pub fn key_bindings() -> InfoSheet {
+        InfoSheet::default()
+            .key_binding("<esc>", "Cancel")
+            .key_binding("<tab>", "Next field")
+            .key_binding("<shift+tab>", "Prev field")
+            .key_binding("<up/down>", "Prev/Next row")
+            .key_binding("<left/right>", "Move in row")
+            .key_binding("<space>", "Cycle value")
+            .key_binding("<enter>", "Next/Confirm")
+    }
+
     pub fn on_confirm(
         mut self,
         cb: impl Fn(HashMap<String, FieldComponent>) -> anyhow::Result<M> + Send + Sync + 'static,

@@ -11,4 +11,10 @@ pub enum AppFocus {
     TransferProcesses,
     Edrs,
     DataPlanes,
+    Participants,
+    DataspaceProfiles,
+    CelExpressions,
+    CachedDocuments,
+    DcpScopes,
+    SchemaValidators,
 }

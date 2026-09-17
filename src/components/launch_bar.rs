@@ -1,4 +1,7 @@
-use crate::{types::nav::Nav, widgets::text_input::TextInput};
+use crate::{
+    types::nav::{Nav, Workspace},
+    widgets::text_input::TextInput,
+};
 
 use self::msg::LaunchBarMsg;
 use super::{Action, Component, ComponentEvent, ComponentMsg, ComponentReturn, Notification};
@@ -44,6 +47,9 @@ impl Component for LaunchBar {
             LaunchBarMsg::Quit => Ok(ComponentReturn::action(Action::Quit)),
             LaunchBarMsg::Esc => Ok(ComponentReturn::action(Action::Esc)),
             LaunchBarMsg::NavTo(nav) => Ok(ComponentReturn::action(Action::NavTo(nav))),
+            LaunchBarMsg::SwitchWorkspace(ws) => {
+                Ok(ComponentReturn::action(Action::SwitchWorkspace(ws)))
+            }
             LaunchBarMsg::Error(err) => Ok(ComponentReturn::action(Action::Notification(
                 Notification::error(err),
             ))),
@@ -68,10 +74,15 @@ impl Component for LaunchBar {
             ]),
             KeyCode::Tab => Ok(vec![LaunchBarMsg::Loop.into()]),
             KeyCode::Enter if current == "q!" => Ok(vec![LaunchBarMsg::Quit.into()]),
-            KeyCode::Enter if !current.is_empty() => match current.parse::<Nav>() {
-                Ok(nav) => Ok(vec![LaunchBarMsg::NavTo(nav).into()]),
-                Err(err) => Ok(vec![LaunchBarMsg::Error(err.to_string()).into()]),
-            },
+            KeyCode::Enter if !current.is_empty() => {
+                if let Ok(ws) = current.parse::<Workspace>() {
+                    return Ok(vec![LaunchBarMsg::SwitchWorkspace(ws).into()]);
+                }
+                match current.parse::<Nav>() {
+                    Ok(nav) => Ok(vec![LaunchBarMsg::NavTo(nav).into()]),
+                    Err(err) => Ok(vec![LaunchBarMsg::Error(err.to_string()).into()]),
+                }
+            }
             KeyCode::Enter | KeyCode::Esc => Ok(vec![LaunchBarMsg::Esc.into()]),
             _ => Ok(to_input_request(&Event::Key(key))
                 .map(|request| LaunchBarMsg::AppendCommand(request).into())

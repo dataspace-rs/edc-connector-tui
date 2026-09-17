@@ -126,6 +126,39 @@ does not have to be written by hand:
 
 When running with the `connector` subcommand there is no config file: changes are kept in memory only.
 
+### Admin workspace (v5)
+
+Connectors speaking the v5 management API (`api_version = "v5"`) expose the global, participant
+independent resources of an EDC-V deployment. The TUI keeps them in a separate *Admin* workspace so
+they do not mix with the day-to-day views:
+
+- `ctrl+a` toggles between the `Operations` and the `Admin` workspace; the launch bar accepts
+  `:admin` and `:ops` as well. `tab`/`shift+tab` only cycle through the entries of the active
+  workspace, and each workspace remembers the last view you were in. Switching is refused for v3
+  and v4 connectors.
+- The admin views are `Participants`, `DataspaceProfiles`, `CelExpressions`, `CachedDocuments`,
+  `DcpScopes` and `SchemaValidators`. The launch bar reaches them directly with `:participants`,
+  `:profiles`, `:cel`, `:cache`, `:scopes` and `:schemas`.
+- Every admin view supports `a` (add), `e` (edit) and `d` (delete, after a `y/n` confirmation)
+  through the same forms as the connectors view, from the list and from the detail view
+  (`enter`). Some views have extra actions: `t` tests a CEL expression against an operator,
+  a right operand and `ctx` parameters; `u` makes the connector fetch a cached document again;
+  `l` associates dataspace profiles with a participant and `c` edits its configuration. Open the
+  participant detail with `enter` first so `l` and `c` are pre-filled with the current values.
+- Form conventions: lists (scopes, actions, profiles, JSON-LD context URLs) are comma separated;
+  structured values (trusted issuers, cached document content, properties, config entries) are
+  typed as single-line JSON; a blank id lets the connector generate one; ids and profile names
+  cannot be changed when editing.
+- The admin APIs require a token with the `management-api:admin` scope, e.g. for token exchange:
+
+```toml
+[connectors.auth]
+type="token-exchange"
+token_exchange_url="http://jwtlet:8080/token"
+subject_token_file="/var/run/secrets/jwtlet/token"
+scopes=["management-api:admin"]
+```
+
 > Altough `edc-connector-tui` builds for OSX and Windows are available, it has been only tested on Linux.
 > Contributions are welcome for multiplatform support/testing 
 

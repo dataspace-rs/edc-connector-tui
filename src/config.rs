@@ -114,6 +114,12 @@ impl ConnectorApiVersion {
     pub fn supports_edrs(&self) -> bool {
         matches!(self, ConnectorApiVersion::V3)
     }
+
+    /// The admin resources (participants, dataspace profiles, CEL expressions, ...) are
+    /// part of the v5 management API only.
+    pub fn supports_admin(&self) -> bool {
+        matches!(self, ConnectorApiVersion::V5)
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
