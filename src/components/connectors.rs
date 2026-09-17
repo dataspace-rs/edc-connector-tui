@@ -56,7 +56,7 @@ impl Component for ConnectorsComponent {
     ) -> anyhow::Result<ComponentReturn<Self::Msg>> {
         match msg.take() {
             ConnectorsMsg::ConnectorSelected(connector) => {
-                self.selected = Some(connector.clone());
+                self.selected = Some(*connector);
                 Ok(ComponentReturn::action(Action::NavTo(Nav::AssetsList)))
             }
             ConnectorsMsg::TableEvent(table) => {
@@ -90,7 +90,11 @@ impl ConnectorsComponent {
                 connectors.into_iter().map(ConnectorEntry).collect(),
                 true,
             )
-            .on_select(|connector| Box::new(ConnectorsMsg::ConnectorSelected(connector.0.clone()))),
+            .on_select(|connector| {
+                Box::new(ConnectorsMsg::ConnectorSelected(Box::new(
+                    connector.0.clone(),
+                )))
+            }),
             selected,
         }
     }

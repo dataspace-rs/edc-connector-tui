@@ -88,6 +88,23 @@ Supported `auth` types:
 - `{ type = "token", token_alias = "..." }` sends the token in the `X-Api-Key` header
 - `{ type = "bearer-token", token_alias = "..." }` sends the token as `Authorization: Bearer <token>`
 - `{ type = "oauth2", client_id = "...", token_url = "...", secret_alias = "..." }` fetches a token via OAuth2 client credentials
+- `{ type = "token-exchange", token_exchange_url = "...", subject_token_file = "..." }` exchanges a workload credential for a JWT via OAuth2 Token Exchange (RFC 8693), sent as `Authorization: Bearer <token>`
+
+For `token-exchange` the subject token comes from exactly one of `subject_token_file` (a path, re-read on every exchange so rotated credentials are picked up) or `subject_token_alias` (a keyring alias, like `token_alias`). Optional fields: `resource` (defaults to the connector's `participant_context_id`), `audience` (defaults to `edcv`) and `scopes` (defaults to `["management-api:read", "management-api:write"]`):
+
+``` toml
+[[connectors]]
+name="Provider"
+address="http://localhost:29193/management"
+api_version="v5"
+participant_context_id="provider"
+
+[connectors.auth]
+type="token-exchange"
+token_exchange_url="http://jwtlet:8080/token"
+subject_token_file="/var/run/secrets/jwtlet/token"
+scopes=["management-api:read", "management-api:write"]
+```
 
 
 For configuration above the `token` could be set with `secret-tool` on Linux:

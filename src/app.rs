@@ -5,7 +5,9 @@ pub mod model;
 mod msg;
 
 use crossterm::event::{self, Event, KeyCode};
-use edc_connector_client::{Auth, EdcConnectorClient, OAuth2Config};
+use edc_connector_client::{
+    Auth, EdcConnectorClient, OAuth2Config, SubjectToken, TokenExchangeConfig,
+};
 use futures::FutureExt;
 use keyring::Entry;
 use ratatui::{
@@ -90,6 +92,72 @@ impl App {
                         ConnectorStatus::Custom(format!(
                             "Secret not found for alias {}",
                             secret_alias
+                        )),
+                        Auth::NoAuth,
+                    ),
+                }
+            }
+            AuthKind::TokenExchange {
+                token_exchange_url,
+                subject_token_file,
+                subject_token_alias,
+                resource,
+                audience,
+                scopes,
+            } => {
+                let subject_token = match (subject_token_file, subject_token_alias) {
+                    (Some(file), None) => SubjectToken::file(file),
+                    (None, Some(alias)) => {
+                        match Entry::new(SERVICE, alias).and_then(|entry| entry.get_password()) {
+                            Ok(token) => SubjectToken::static_token(token),
+                            Err(_err) => {
+                                return (
+                                    ConnectorStatus::Custom(format!(
+                                        "Subject token not found for alias {}",
+                                        alias
+                                    )),
+                                    Auth::NoAuth,
+                                )
+                            }
+                        }
+                    }
+                    _ => {
+                        return (
+                            ConnectorStatus::Custom(
+                                "token-exchange needs exactly one of subject_token_file or subject_token_alias"
+                                    .to_string(),
+                            ),
+                            Auth::NoAuth,
+                        )
+                    }
+                };
+
+                let Some(resource) = resource
+                    .clone()
+                    .or_else(|| cfg.participant_context_id().cloned())
+                else {
+                    return (
+                        ConnectorStatus::Custom(
+                            "token-exchange needs resource or participant_context_id".to_string(),
+                        ),
+                        Auth::NoAuth,
+                    );
+                };
+
+                let cfg = TokenExchangeConfig::builder()
+                    .token_exchange_url(token_exchange_url)
+                    .subject_token(subject_token)
+                    .resource(resource)
+                    .maybe_audience(audience.clone())
+                    .maybe_scopes(scopes.clone())
+                    .build();
+
+                match Auth::token_exchange(cfg) {
+                    Ok(auth) => (ConnectorStatus::Connected, auth),
+                    Err(e) => (
+                        ConnectorStatus::Custom(format!(
+                            "Failed to initialize token exchange: {}",
+                            e
                         )),
                         Auth::NoAuth,
                     ),
@@ -494,5 +562,98 @@ impl App {
             KeyCode::Char(':') => vec![(AppMsg::ShowLaunchBar.into())],
             _ => vec![],
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn connector(toml_str: &str) -> ConnectorConfig {
+        let cfg: Config = toml::from_str(toml_str).expect("config should parse");
+        cfg.connectors.into_iter().next().unwrap()
+    }
+
+    fn custom_status(status: &ConnectorStatus) -> &str {
+        match status {
+            ConnectorStatus::Custom(msg) => msg,
+            ConnectorStatus::Connected => panic!("expected a custom status"),
+        }
+    }
+
+    #[test]
+    fn token_exchange_with_file_and_participant_context_connects() {
+        let cfg = connector(
+            r#"
+[[connectors]]
+name = "c"
+address = "http://localhost:29193/management"
+participant_context_id = "provider"
+auth = { type = "token-exchange", token_exchange_url = "http://jwtlet:8080/token", subject_token_file = "/tmp/token" }
+"#,
+        );
+        let (status, auth) = App::auth(&cfg);
+        assert!(matches!(status, ConnectorStatus::Connected), "{status:?}");
+        assert!(matches!(auth, Auth::TokenExchange(_)));
+    }
+
+    #[test]
+    fn token_exchange_without_subject_token_source_fails() {
+        let cfg = connector(
+            r#"
+[[connectors]]
+name = "c"
+address = "http://localhost:29193/management"
+auth = { type = "token-exchange", token_exchange_url = "http://jwtlet:8080/token", resource = "provider" }
+"#,
+        );
+        let (status, auth) = App::auth(&cfg);
+        assert!(custom_status(&status).contains("exactly one of"));
+        assert!(matches!(auth, Auth::NoAuth));
+    }
+
+    #[test]
+    fn token_exchange_with_both_subject_token_sources_fails() {
+        let cfg = connector(
+            r#"
+[[connectors]]
+name = "c"
+address = "http://localhost:29193/management"
+auth = { type = "token-exchange", token_exchange_url = "http://jwtlet:8080/token", resource = "provider", subject_token_file = "/tmp/token", subject_token_alias = "alias" }
+"#,
+        );
+        let (status, auth) = App::auth(&cfg);
+        assert!(custom_status(&status).contains("exactly one of"));
+        assert!(matches!(auth, Auth::NoAuth));
+    }
+
+    #[test]
+    fn token_exchange_without_resource_or_participant_context_fails() {
+        let cfg = connector(
+            r#"
+[[connectors]]
+name = "c"
+address = "http://localhost:29193/management"
+auth = { type = "token-exchange", token_exchange_url = "http://jwtlet:8080/token", subject_token_file = "/tmp/token" }
+"#,
+        );
+        let (status, auth) = App::auth(&cfg);
+        assert!(custom_status(&status).contains("resource or participant_context_id"));
+        assert!(matches!(auth, Auth::NoAuth));
+    }
+
+    #[test]
+    fn token_exchange_with_invalid_url_fails() {
+        let cfg = connector(
+            r#"
+[[connectors]]
+name = "c"
+address = "http://localhost:29193/management"
+auth = { type = "token-exchange", token_exchange_url = "not a url", subject_token_file = "/tmp/token", resource = "provider" }
+"#,
+        );
+        let (status, auth) = App::auth(&cfg);
+        assert!(custom_status(&status).contains("Failed to initialize token exchange"));
+        assert!(matches!(auth, Auth::NoAuth));
     }
 }

@@ -50,6 +50,7 @@ pub struct ConnectorConfig {
     address: String,
     #[serde(default)]
     api_version: ConnectorApiVersion,
+    #[serde(default)]
     auth: AuthKind,
     #[serde(default)]
     participant_context_id: Option<String>,
@@ -97,6 +98,24 @@ pub enum AuthKind {
         token_url: String,
         secret_alias: String,
     },
+    /// OAuth2 Token Exchange (RFC 8693): a workload credential (the subject token) is
+    /// exchanged at a broker for a JWT that is sent as `Authorization: Bearer`.
+    TokenExchange {
+        token_exchange_url: String,
+        /// Path to a file holding the subject token, re-read on every exchange.
+        #[serde(default)]
+        subject_token_file: Option<PathBuf>,
+        /// Keyring alias holding a static subject token.
+        #[serde(default)]
+        subject_token_alias: Option<String>,
+        /// The `resource` parameter; defaults to the connector's `participant_context_id`.
+        #[serde(default)]
+        resource: Option<String>,
+        #[serde(default)]
+        audience: Option<String>,
+        #[serde(default)]
+        scopes: Option<Vec<String>>,
+    },
 }
 
 impl AuthKind {
@@ -106,6 +125,7 @@ impl AuthKind {
             AuthKind::Token { .. } => "Token based",
             AuthKind::BearerToken { .. } => "Bearer token",
             AuthKind::OAuth { .. } => "OAuth2",
+            AuthKind::TokenExchange { .. } => "Token exchange",
         }
     }
 }
@@ -148,6 +168,125 @@ impl From<ConnectorApiVersion> for EdcConnectorApiVersion {
             ConnectorApiVersion::V3 => EdcConnectorApiVersion::V3,
             ConnectorApiVersion::V4 => EdcConnectorApiVersion::V4,
             ConnectorApiVersion::V5 => EdcConnectorApiVersion::V5,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(toml_str: &str) -> Config {
+        toml::from_str(toml_str).expect("config should parse")
+    }
+
+    #[test]
+    fn auth_defaults_to_no_auth_when_omitted() {
+        let cfg = parse(
+            r#"
+[[connectors]]
+name = "c"
+address = "http://localhost:29193/management"
+"#,
+        );
+        assert!(matches!(cfg.connectors[0].auth(), AuthKind::NoAuth));
+    }
+
+    #[test]
+    fn parses_oauth2() {
+        let cfg = parse(
+            r#"
+[[connectors]]
+name = "c"
+address = "http://localhost:29193/management"
+auth = { type = "oauth2", client_id = "id", token_url = "http://idp/token", secret_alias = "alias" }
+"#,
+        );
+        match cfg.connectors[0].auth() {
+            AuthKind::OAuth {
+                client_id,
+                token_url,
+                secret_alias,
+            } => {
+                assert_eq!(client_id, "id");
+                assert_eq!(token_url, "http://idp/token");
+                assert_eq!(secret_alias, "alias");
+            }
+            other => panic!("unexpected auth: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_token_exchange_with_file() {
+        let cfg = parse(
+            r#"
+[[connectors]]
+name = "c"
+address = "http://localhost:29193/management"
+participant_context_id = "provider"
+auth = { type = "token-exchange", token_exchange_url = "http://jwtlet:8080/token", subject_token_file = "/var/run/secrets/jwtlet/token" }
+"#,
+        );
+        match cfg.connectors[0].auth() {
+            AuthKind::TokenExchange {
+                token_exchange_url,
+                subject_token_file,
+                subject_token_alias,
+                resource,
+                audience,
+                scopes,
+            } => {
+                assert_eq!(token_exchange_url, "http://jwtlet:8080/token");
+                assert_eq!(
+                    subject_token_file.as_deref(),
+                    Some(std::path::Path::new("/var/run/secrets/jwtlet/token"))
+                );
+                assert!(subject_token_alias.is_none());
+                assert!(resource.is_none());
+                assert!(audience.is_none());
+                assert!(scopes.is_none());
+            }
+            other => panic!("unexpected auth: {other:?}"),
+        }
+        assert_eq!(cfg.connectors[0].auth().kind(), "Token exchange");
+    }
+
+    #[test]
+    fn parses_token_exchange_with_alias_and_options() {
+        let cfg = parse(
+            r#"
+[[connectors]]
+name = "c"
+address = "http://localhost:29193/management"
+
+[connectors.auth]
+type = "token-exchange"
+token_exchange_url = "http://jwtlet:8080/token"
+subject_token_alias = "jwtlet_alias"
+resource = "provider"
+audience = "my-audience"
+scopes = ["management-api:assets:read"]
+"#,
+        );
+        match cfg.connectors[0].auth() {
+            AuthKind::TokenExchange {
+                subject_token_file,
+                subject_token_alias,
+                resource,
+                audience,
+                scopes,
+                ..
+            } => {
+                assert!(subject_token_file.is_none());
+                assert_eq!(subject_token_alias.as_deref(), Some("jwtlet_alias"));
+                assert_eq!(resource.as_deref(), Some("provider"));
+                assert_eq!(audience.as_deref(), Some("my-audience"));
+                assert_eq!(
+                    scopes.as_deref(),
+                    Some(&["management-api:assets:read".to_string()][..])
+                );
+            }
+            other => panic!("unexpected auth: {other:?}"),
         }
     }
 }
