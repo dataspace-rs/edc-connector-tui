@@ -24,7 +24,7 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Color, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Borders, Clear, Paragraph},
     Frame,
 };
 use serde::Serialize;
@@ -163,6 +163,24 @@ enum Mode<T> {
     },
 }
 
+struct LoadingState {
+    request_id: u64,
+    message: String,
+    spinner_frame: usize,
+}
+
+impl LoadingState {
+    const FRAMES: [&'static str; 4] = ["|", "/", "-", "\\"];
+
+    fn spinner(&self) -> &'static str {
+        Self::FRAMES[self.spinner_frame % Self::FRAMES.len()]
+    }
+
+    fn advance(&mut self) {
+        self.spinner_frame = (self.spinner_frame + 1) % Self::FRAMES.len();
+    }
+}
+
 impl<T> Debug for Mode<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -195,6 +213,8 @@ pub struct ResourcesComponent<T: TableEntry, R: DrawableResource> {
     connector: Option<Connector>,
     on_fetch: Option<OnFetch<T>>,
     on_single_fetch: Option<OnSingleFetch<T, R>>,
+    loading: Option<LoadingState>,
+    next_request_id: u64,
     /// The entry whose detail view is (being) shown.
     selected: Option<T>,
     mode: Mode<T>,
@@ -333,49 +353,83 @@ impl<
         sheet
     }
 
-    fn fetch(&self) -> anyhow::Result<ComponentReturn<ResourcesMsg<T, R>>> {
-        if let (Some(connector), Some(on_fetch)) = (self.connector.as_ref(), self.on_fetch.as_ref())
-        {
-            let query = self.query.clone();
+    fn begin_loading(&mut self, message: String) -> u64 {
+        self.next_request_id = self.next_request_id.wrapping_add(1);
+        self.loading = Some(LoadingState {
+            request_id: self.next_request_id,
+            message,
+            spinner_frame: 0,
+        });
+        self.next_request_id
+    }
 
-            let connector = connector.clone();
-            let on_fetch = on_fetch.clone();
-            Ok(ComponentReturn::cmd(
-                async move {
-                    match on_fetch(&connector, query).await {
-                        Ok(elements) => Ok(vec![ResourcesMsg::ResourcesFetched(elements).into()]),
-                        Err(err) => Ok(vec![
-                            ResourcesMsg::ResourcesFetchFailed(err.to_string()).into()
-                        ]),
-                    }
-                }
-                .boxed(),
-            ))
+    fn finish_loading(&mut self, request_id: u64) -> bool {
+        if self
+            .loading
+            .as_ref()
+            .is_some_and(|loading| loading.request_id == request_id)
+        {
+            self.loading = None;
+            true
         } else {
-            Ok(ComponentReturn::empty())
+            false
         }
     }
 
-    fn single_fetch(&self, selected: T) -> anyhow::Result<ComponentReturn<ResourcesMsg<T, R>>> {
-        if let (Some(connector), Some(on_single_fetch)) =
-            (self.connector.as_ref(), self.on_single_fetch.as_ref())
-        {
-            let connector = connector.clone();
-            let on_single_fetch = on_single_fetch.clone();
-            Ok(ComponentReturn::cmd(
-                async move {
-                    match on_single_fetch(&connector, selected).await {
-                        Ok(element) => Ok(vec![ResourcesMsg::ResourceFetched(element).into()]),
-                        Err(err) => Ok(vec![
-                            ResourcesMsg::ResourcesFetchFailed(err.to_string()).into()
-                        ]),
+    fn fetch(&mut self) -> anyhow::Result<ComponentReturn<ResourcesMsg<T, R>>> {
+        let Some(connector) = self.connector.clone() else {
+            return Ok(ComponentReturn::empty());
+        };
+        let Some(on_fetch) = self.on_fetch.clone() else {
+            return Ok(ComponentReturn::empty());
+        };
+        let query = self.query.clone();
+        let request_id = self.begin_loading(format!("Loading {}...", R::title()));
+
+        Ok(ComponentReturn::cmd(
+            async move {
+                match on_fetch(&connector, query).await {
+                    Ok(resources) => Ok(vec![ResourcesMsg::ResourcesFetched {
+                        request_id,
+                        resources,
                     }
+                    .into()]),
+                    Err(err) => Ok(vec![ResourcesMsg::ResourcesFetchFailed {
+                        request_id,
+                        error: err.to_string(),
+                    }
+                    .into()]),
                 }
-                .boxed(),
-            ))
-        } else {
-            Ok(ComponentReturn::empty())
-        }
+            }
+            .boxed(),
+        ))
+    }
+
+    fn single_fetch(&mut self, selected: T) -> anyhow::Result<ComponentReturn<ResourcesMsg<T, R>>> {
+        let Some(connector) = self.connector.clone() else {
+            return Ok(ComponentReturn::empty());
+        };
+        let Some(on_single_fetch) = self.on_single_fetch.clone() else {
+            return Ok(ComponentReturn::empty());
+        };
+        let request_id = self.begin_loading(format!("Loading {}...", R::title()));
+        Ok(ComponentReturn::cmd(
+            async move {
+                match on_single_fetch(&connector, selected).await {
+                    Ok(resource) => Ok(vec![ResourcesMsg::ResourceFetched {
+                        request_id,
+                        resource,
+                    }
+                    .into()]),
+                    Err(err) => Ok(vec![ResourcesMsg::ResourcesFetchFailed {
+                        request_id,
+                        error: err.to_string(),
+                    }
+                    .into()]),
+                }
+            }
+            .boxed(),
+        ))
     }
 
     /// Runs `hook` on `target` in the background and reports the outcome.
@@ -624,6 +678,24 @@ impl<
             }
         }
     }
+
+    fn view_loading(&self, f: &mut Frame, area: Rect) {
+        let Some(loading) = self.loading.as_ref() else {
+            return;
+        };
+        let popup_area = popup::centered_fixed(area, 32, 5);
+        let block = Block::default()
+            .title_top(Line::from(" Loading ").centered())
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Cyan));
+        let content = block.inner(popup_area);
+        f.render_widget(Clear, popup_area);
+        f.render_widget(block, popup_area);
+        f.render_widget(
+            Paragraph::new(format!("{} {}", loading.spinner(), loading.message)).centered(),
+            content,
+        );
+    }
 }
 
 impl<T: TableEntry + Clone, R: DrawableResource> Default for ResourcesComponent<T, R> {
@@ -638,6 +710,8 @@ impl<T: TableEntry + Clone, R: DrawableResource> Default for ResourcesComponent<
             on_fetch: None,
             query: Query::default(),
             on_single_fetch: None,
+            loading: None,
+            next_request_id: 0,
             filter: Filter::new(Query::default())
                 .on_confirm(|query| Box::new(ResourcesMsg::ChangeQuery(query))),
             selected: None,
@@ -676,6 +750,7 @@ impl<
             self.filter.view(f, rect);
         }
         self.view_popup(f);
+        self.view_loading(f, rect);
     }
 
     async fn update(
@@ -683,7 +758,10 @@ impl<
         msg: ComponentMsg<Self::Msg>,
     ) -> anyhow::Result<ComponentReturn<Self::Msg>> {
         match msg.take() {
-            ResourcesMsg::ResourceFetched(resource) => {
+            ResourcesMsg::ResourceFetched {
+                request_id,
+                resource,
+            } if self.finish_loading(request_id) => {
                 self.resource.update_resource(Some(resource));
                 self.focus = Focus::Resource;
                 Ok(ComponentReturn::action(Action::ChangeSheet))
@@ -702,7 +780,10 @@ impl<
                 })
                 .await
             }
-            ResourcesMsg::ResourcesFetched(resources) => {
+            ResourcesMsg::ResourcesFetched {
+                request_id,
+                resources,
+            } if self.finish_loading(request_id) => {
                 self.table.update_elements(resources);
                 Ok(ComponentReturn::empty())
             }
@@ -745,9 +826,16 @@ impl<
                 Self::forward_update(&mut self.resource, msg.into(), ResourcesMsg::ResourceMsg)
                     .await
             }
-            ResourcesMsg::ResourcesFetchFailed(error) => Ok(ComponentReturn::action(
-                Action::Notification(Notification::error(error)),
-            )),
+            ResourcesMsg::ResourcesFetchFailed { request_id, error }
+                if self.finish_loading(request_id) =>
+            {
+                Ok(ComponentReturn::action(Action::Notification(
+                    Notification::error(error),
+                )))
+            }
+            ResourcesMsg::ResourceFetched { .. }
+            | ResourcesMsg::ResourcesFetched { .. }
+            | ResourcesMsg::ResourcesFetchFailed { .. } => Ok(ComponentReturn::empty()),
             ResourcesMsg::ShowAdd => Ok(self.show_form(None)),
             ResourcesMsg::ShowEdit => Ok(match self.target() {
                 Some(target) => self.show_form(Some(target)),
@@ -823,6 +911,15 @@ impl<
         &mut self,
         evt: ComponentEvent,
     ) -> anyhow::Result<Vec<ComponentMsg<Self::Msg>>> {
+        if matches!(evt, ComponentEvent::Tick) {
+            if let Some(loading) = self.loading.as_mut() {
+                loading.advance();
+            }
+            return Ok(vec![]);
+        }
+        if self.loading.is_some() {
+            return Ok(vec![]);
+        }
         let key: Option<KeyEvent> = match &evt {
             ComponentEvent::Event(Event::Key(key)) if key.kind != KeyEventKind::Release => {
                 Some(*key)
@@ -973,7 +1070,7 @@ mod tests {
     };
 
     use crossterm::event::{KeyEvent, KeyModifiers};
-    use ratatui::widgets::Row;
+    use ratatui::{backend::TestBackend, widgets::Row, Terminal};
 
     use super::*;
     use crate::{
@@ -1098,6 +1195,19 @@ mod tests {
         c
     }
 
+    fn render(c: &mut Comp) -> String {
+        let mut terminal = Terminal::new(TestBackend::new(60, 12)).unwrap();
+        terminal.draw(|f| c.view(f, f.area())).unwrap();
+        let buffer = terminal.backend().buffer().clone();
+        (0..buffer.area.height)
+            .flat_map(|y| {
+                (0..buffer.area.width)
+                    .map(|x| buffer[(x, y)].symbol().to_string())
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
+
     fn key(code: KeyCode) -> KeyEvent {
         KeyEvent::from(code)
     }
@@ -1194,6 +1304,58 @@ mod tests {
             assert_eq!(notifications(&actions), vec!["No Things selected"], "{k}");
             assert!(matches!(c.mode, Mode::List));
         }
+    }
+
+    #[tokio::test]
+    async fn loading_overlay_animates_and_ignores_resource_input() {
+        let log = Log::default();
+        let mut c = component(&log, vec!["a"]);
+        let _request = c.init(connector()).await.unwrap();
+
+        assert!(render(&mut c).contains("Loading Things..."));
+        assert_eq!(c.loading.as_ref().unwrap().spinner(), "|");
+        c.handle_event(ComponentEvent::Tick).unwrap();
+        assert_eq!(c.loading.as_ref().unwrap().spinner(), "/");
+        assert!(c
+            .handle_event(key(KeyCode::Char('r')).into())
+            .unwrap()
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn stale_fetch_results_do_not_replace_active_request() {
+        let log = Log::default();
+        let mut c = component(&log, vec![]);
+        let _first = c.init(connector()).await.unwrap();
+        let first_request_id = c.loading.as_ref().unwrap().request_id;
+        let _second = c.fetch().unwrap();
+        let second_request_id = c.loading.as_ref().unwrap().request_id;
+
+        c.update(
+            ResourcesMsg::ResourcesFetched {
+                request_id: first_request_id,
+                resources: vec![Entry("stale".to_string())],
+            }
+            .into(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(c.loading.as_ref().unwrap().request_id, second_request_id);
+        assert!(c.table.elements().is_empty());
+
+        c.update(
+            ResourcesMsg::ResourcesFetched {
+                request_id: second_request_id,
+                resources: vec![Entry("current".to_string())],
+            }
+            .into(),
+        )
+        .await
+        .unwrap();
+
+        assert!(c.loading.is_none());
+        assert_eq!(c.table.elements()[0].0, "current");
     }
 
     #[tokio::test]

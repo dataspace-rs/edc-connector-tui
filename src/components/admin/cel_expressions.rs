@@ -22,7 +22,7 @@ use crate::{
     },
 };
 
-use super::{compact_json, join};
+use super::join;
 
 #[derive(Debug, Clone)]
 pub struct CelExpressionEntry(CommonExpressionLanguage);
@@ -49,19 +49,13 @@ impl CelExpressionEntry {
 
     /// The create request: a blank id lets the connector generate one.
     pub fn to_new(&self) -> NewCommonExpressionLanguage {
-        let mut builder = NewCommonExpressionLanguage::builder()
+        let builder = NewCommonExpressionLanguage::builder()
             .maybe_id(Some(self.0.id().to_string()).filter(|id| !id.is_empty()))
             .left_operand(self.0.left_operand().to_string())
-            .maybe_description(self.0.description().clone())
+            .description(self.0.description().to_string())
             .scopes(self.0.scopes().clone())
             .actions(self.0.actions().clone())
             .expression(self.0.expression().to_string());
-        for (k, v) in self.0.properties().iter() {
-            builder = builder.property(k, v.0.clone());
-        }
-        for (k, v) in self.0.private_properties().iter() {
-            builder = builder.private_property(k, v.0.clone());
-        }
         builder.build()
     }
 }
@@ -73,7 +67,7 @@ impl TableEntry for CelExpressionEntry {
             self.0.left_operand().to_string(),
             join(self.0.scopes()),
             join(self.0.actions()),
-            self.0.description().clone().unwrap_or_default(),
+            self.0.description().to_string(),
         ])
     }
 
@@ -102,14 +96,9 @@ impl DrawableResource for CelExpressionEntry {
             Field::string("id", self.0.id()),
             Field::string("leftOperand", self.0.left_operand()),
             Field::string("expression", self.0.expression()),
-            Field::string(
-                "description",
-                self.0.description().clone().unwrap_or_default(),
-            ),
+            Field::string("description", self.0.description()),
             Field::string("scopes", join(self.0.scopes())),
             Field::string("actions", join(self.0.actions())),
-            Field::json("properties", self.0.properties()),
-            Field::json("privateProperties", self.0.private_properties()),
         ]
     }
 }
@@ -147,8 +136,7 @@ pub fn form(edit: Option<&CelExpressionEntry>) -> Form<CelExpressionEntry> {
         .field(TextField::plain(
             "description",
             "Description",
-            &cel.and_then(|c| c.description().clone())
-                .unwrap_or_default(),
+            cel.map(|c| c.description()).unwrap_or_default(),
         ))
         .field(
             RowField::default()
@@ -162,22 +150,6 @@ pub fn form(edit: Option<&CelExpressionEntry>) -> Form<CelExpressionEntry> {
                     "actions",
                     "Actions (comma separated, e.g. use)",
                     &cel.map(|c| join(c.actions())).unwrap_or_default(),
-                )),
-        )
-        .field(
-            RowField::default()
-                .name("props")
-                .field(TextField::plain(
-                    "properties",
-                    "Properties (JSON object)",
-                    &cel.map(|c| compact_json(c.properties()))
-                        .unwrap_or_default(),
-                ))
-                .field(TextField::plain(
-                    "private_properties",
-                    "Private properties (JSON object)",
-                    &cel.map(|c| compact_json(c.private_properties()))
-                        .unwrap_or_default(),
                 )),
         )
         .on_confirm(move |fields| parse_values(&flatten(fields), target.as_deref()))
@@ -194,24 +166,13 @@ pub(crate) fn parse_values(
             anyhow::bail!("Id cannot be changed");
         }
     }
-    let properties: Map<String, Value> =
-        json(values, "properties", "Properties")?.unwrap_or_default();
-    let private_properties: Map<String, Value> =
-        json(values, "private_properties", "Private properties")?.unwrap_or_default();
-
-    let mut builder = CommonExpressionLanguage::builder()
+    let builder = CommonExpressionLanguage::builder()
         .id(id.unwrap_or_default())
         .left_operand(required(values, "left_operand", "Left operand")?)
-        .maybe_description(optional(values, "description"))
+        .description(required(values, "description", "Description")?)
         .scopes(list(values, "scopes"))
         .actions(list(values, "actions"))
         .expression(required(values, "expression", "Expression")?);
-    for (k, v) in properties {
-        builder = builder.property(&k, v);
-    }
-    for (k, v) in private_properties {
-        builder = builder.private_property(&k, v);
-    }
     Ok(CelExpressionEntry(builder.build()))
 }
 
@@ -259,46 +220,42 @@ mod tests {
     }
 
     #[test]
-    fn parses_lists_and_json_properties() {
+    fn parses_required_fields_and_lists() {
         let entry = parse_values(
             &values(&[
                 ("left_operand", "MembershipCredential"),
                 ("expression", "ctx.x == 1"),
+                ("description", "Membership credential check"),
                 ("scopes", "a, b"),
                 ("actions", "use"),
-                ("properties", r#"{"k":"v"}"#),
             ]),
             None,
         )
         .unwrap();
         assert_eq!(entry.0.scopes(), &vec!["a".to_string(), "b".to_string()]);
         assert_eq!(entry.0.actions(), &vec!["use".to_string()]);
-        assert_eq!(
-            entry.0.properties().get::<String>("k").unwrap().as_deref(),
-            Some("v")
-        );
-        assert_eq!(entry.0.description(), &None);
+        assert_eq!(entry.0.description(), "Membership credential check");
         let new = serde_json::to_value(entry.to_new()).unwrap();
         assert!(new.get("@id").is_none());
-        assert_eq!(new["properties"]["k"], "v");
+        assert_eq!(new["description"], "Membership credential check");
+        assert!(new.get("properties").is_none());
+        assert!(new.get("privateProperties").is_none());
     }
 
     #[test]
-    fn required_fields_and_invalid_json_are_rejected() {
+    fn required_fields_are_rejected() {
         let err = parse_values(&values(&[("expression", "x")]), None).unwrap_err();
         assert_eq!(err.to_string(), "Left operand is required");
+        let err =
+            parse_values(&values(&[("left_operand", "l"), ("expression", "x")]), None).unwrap_err();
+        assert_eq!(err.to_string(), "Description is required");
         let err = parse_values(
             &values(&[
+                ("id", "b"),
                 ("left_operand", "l"),
                 ("expression", "x"),
-                ("properties", "{"),
+                ("description", "d"),
             ]),
-            None,
-        )
-        .unwrap_err();
-        assert!(err.to_string().starts_with("Properties is not valid JSON"));
-        let err = parse_values(
-            &values(&[("id", "b"), ("left_operand", "l"), ("expression", "x")]),
             Some("a"),
         )
         .unwrap_err();

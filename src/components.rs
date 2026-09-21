@@ -275,6 +275,8 @@ pub trait ActionHandler {
 #[derive(Clone, Debug)]
 pub enum ComponentEvent {
     Event(Event),
+    /// Emitted by the runner when no terminal event arrives before the tick deadline.
+    Tick,
 }
 
 impl From<KeyEvent> for ComponentEvent {

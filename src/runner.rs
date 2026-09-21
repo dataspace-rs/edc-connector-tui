@@ -46,18 +46,20 @@ impl<C: Component + ActionHandler<Msg = <C as Component>::Msg> + Send> Runner<C>
             }
             drop(guard);
 
-            if event::poll(self.tick_rate)? {
-                let evt = event::read()?;
-                let event_msgs = self
-                    .component
-                    .handle_event(ComponentEvent::Event(evt))?
-                    .into_iter()
-                    .collect::<Vec<_>>();
-
-                for m in event_msgs {
-                    msgs.push_back(m);
-                }
+            let evt = if event::poll(self.tick_rate)? {
+                ComponentEvent::Event(event::read()?)
+            } else {
+                ComponentEvent::Tick
             };
+            let event_msgs = self
+                .component
+                .handle_event(evt)?
+                .into_iter()
+                .collect::<Vec<_>>();
+
+            for m in event_msgs {
+                msgs.push_back(m);
+            }
 
             while let Some(msg) = msgs.pop_front() {
                 let actions = {

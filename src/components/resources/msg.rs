@@ -12,7 +12,10 @@ pub type ActionInput = HashMap<String, String>;
 #[derive(Debug)]
 pub enum ResourcesMsg<T, R> {
     ResourceSelected(T),
-    ResourceFetched(R),
+    ResourceFetched {
+        request_id: u64,
+        resource: R,
+    },
     Back,
     NextPage,
     PrevPage,
@@ -23,8 +26,14 @@ pub enum ResourcesMsg<T, R> {
     TableMsg(TableMsg<Box<ResourcesMsg<T, R>>>),
     FilterMsg(FilterMsg<Box<ResourcesMsg<T, R>>>),
     ResourceMsg(ResourceMsg),
-    ResourcesFetched(Vec<T>),
-    ResourcesFetchFailed(String),
+    ResourcesFetched {
+        request_id: u64,
+        resources: Vec<T>,
+    },
+    ResourcesFetchFailed {
+        request_id: u64,
+        error: String,
+    },
     /// Open the form to create a resource.
     ShowAdd,
     /// Open the form pre-filled with the selected resource.
